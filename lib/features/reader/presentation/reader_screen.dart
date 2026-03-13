@@ -6,10 +6,11 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:ngpocket/core/database/app_database.dart';
 import 'package:ngpocket/core/database/database_provider.dart';
+import 'package:ngpocket/core/models/app_settings.dart';
 import 'package:ngpocket/core/services/service_providers.dart';
-import 'package:ngpocket/core/utils/html_cleaner.dart';
 import 'package:ngpocket/features/feed/providers/feed_provider.dart';
 import 'package:ngpocket/features/reader/providers/reader_provider.dart';
 import 'package:ngpocket/features/settings/providers/settings_provider.dart';
@@ -26,8 +27,6 @@ class ReaderScreen extends ConsumerStatefulWidget {
 
 class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   late final ScrollController _scrollController;
-  late final String _plainText;
-  late final List<String> _paragraphList;
   late final ValueNotifier<double> _progressNotifier;
   String? _selectedText;
 
@@ -36,15 +35,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     super.initState();
     _scrollController = ScrollController()..addListener(_syncProgress);
     _progressNotifier = ValueNotifier(0.0);
-
-    final content = widget.article.content.isEmpty
-        ? (widget.article.description ?? widget.article.title)
-        : widget.article.content;
-    // Only run through htmlToPlainText if content is actually HTML.
-    // Parsed/structured content already uses markdown-style markers (> , ## )
-    // that would be destroyed by the HTML parser.
-    _plainText = content.contains('<') ? htmlToPlainText(content) : content;
-    _paragraphList = _paragraphs(_plainText);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(
@@ -65,6 +55,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   @override
   Widget build(BuildContext context) {
     final fontScale = ref.watch(readerFontScaleProvider);
+    final readerFontFamily = ref.watch(readerFontFamilyProvider);
+    final readerTextAlignment = ref.watch(readerTextAlignmentProvider);
+    final preparedAsync = ref.watch(
+      readerPreparedContentProvider(widget.article),
+    );
     final highlightsAsync = ref.watch(
       articleHighlightsProvider(widget.article.id),
     );
@@ -154,130 +149,231 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                 ),
               ),
             ),
-      body: ListView.builder(
-        controller: _scrollController,
-        padding: EdgeInsets.fromLTRB(
-          24,
-          8,
-          24,
-          _selectedText == null ? 40 : 112,
-        ),
-        itemCount: _paragraphList.length + 1,
-        itemBuilder: (context, index) {
-          if (index == 0) {
+      body: preparedAsync.when(
+        data: (prepared) => ListView.builder(
+          controller: _scrollController,
+          padding: EdgeInsets.fromLTRB(
+            24,
+            8,
+            24,
+            _selectedText == null ? 40 : 112,
+          ),
+          itemCount: prepared.paragraphs.length + 1,
+          itemBuilder: (context, index) {
+            if (index == 0) {
+              return Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 720),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (widget.article.image != null &&
+                          widget.article.image!.isNotEmpty)
+                        Hero(
+                          tag: 'article-image-${widget.article.id}',
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(22),
+                            child: CachedNetworkImage(
+                              imageUrl: widget.article.image!,
+                              fit: BoxFit.cover,
+                              height: 220,
+                            ),
+                          ),
+                        ),
+                      if (widget.article.image != null &&
+                          widget.article.image!.isNotEmpty)
+                        const SizedBox(height: 24),
+                      Text(
+                        widget.article.title,
+                        style: _applyReaderFont(
+                          Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                height: 1.22,
+                              ) ??
+                              const TextStyle(fontSize: 30, height: 1.22),
+                          readerFontFamily,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 8,
+                        children: [
+                          if (widget.article.author != null &&
+                              widget.article.author!.isNotEmpty)
+                            _Meta(text: widget.article.author!),
+                          _Meta(text: '${widget.article.readingTime} min read'),
+                          if (widget.article.source != null &&
+                              widget.article.source!.isNotEmpty)
+                            _Meta(text: widget.article.source!),
+                          ...tags.map((tag) => _Meta(text: '#$tag')),
+                        ],
+                      ),
+                      const SizedBox(height: 28),
+                    ],
+                  ),
+                ),
+              );
+            }
+            final paragraph = prepared.paragraphs[index - 1];
             return Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 720),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (widget.article.image != null &&
-                        widget.article.image!.isNotEmpty)
-                      Hero(
-                        tag: 'article-image-${widget.article.id}',
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(22),
-                          child: CachedNetworkImage(
-                            imageUrl: widget.article.image!,
-                            fit: BoxFit.cover,
-                            height: 220,
-                          ),
-                        ),
-                      ),
-                    if (widget.article.image != null &&
-                        widget.article.image!.isNotEmpty)
-                      const SizedBox(height: 24),
-                    Text(
-                      widget.article.title,
-                      style: Theme.of(
-                        context,
-                      ).textTheme.headlineMedium?.copyWith(height: 1.22),
+                child: RepaintBoundary(
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 22),
+                    child: _buildParagraph(
+                      context,
+                      paragraph,
+                      fontScale,
+                      readerFontFamily,
+                      readerTextAlignment,
+                      highlights,
                     ),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 8,
-                      children: [
-                        if (widget.article.author != null &&
-                            widget.article.author!.isNotEmpty)
-                          _Meta(text: widget.article.author!),
-                        _Meta(text: '${widget.article.readingTime} min read'),
-                        if (widget.article.source != null &&
-                            widget.article.source!.isNotEmpty)
-                          _Meta(text: widget.article.source!),
-                        ...tags.map((tag) => _Meta(text: '#$tag')),
-                      ],
-                    ),
-                    const SizedBox(height: 28),
-                  ],
-                ),
-              ),
-            );
-          }
-          final paragraph = _paragraphList[index - 1];
-          return Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 720),
-              child: RepaintBoundary(
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 22),
-                  child: _buildParagraph(
-                    context,
-                    paragraph,
-                    fontScale,
-                    highlights,
                   ),
                 ),
               ),
+            );
+          },
+        ),
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, _) => Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              'Unable to prepare article content.\n$error',
+              textAlign: TextAlign.center,
             ),
-          );
-        },
+          ),
+        ),
       ),
     );
   }
 
   Widget _buildParagraph(
     BuildContext context,
-    String rawParagraph,
+    ReaderParagraph paragraph,
     double fontScale,
+    ReaderFontFamily readerFontFamily,
+    ReaderTextAlignment readerTextAlignment,
     List<Highlight> highlights,
   ) {
-    final parsed = _parseParagraph(rawParagraph);
-    final bodyStyle = Theme.of(context).textTheme.bodyLarge?.copyWith(
-      fontSize: 17.6 * fontScale,
-      height: 1.95,
-      letterSpacing: 0.1,
+    final parsed = paragraph;
+    final bodyStyle = _applyReaderFont(
+      Theme.of(context).textTheme.bodyLarge?.copyWith(
+            fontSize: 17.6 * fontScale,
+            height: 1.95,
+            letterSpacing: 0.1,
+          ) ??
+          TextStyle(
+            fontSize: 17.6 * fontScale,
+            height: 1.95,
+            letterSpacing: 0.1,
+          ),
+      readerFontFamily,
     );
 
-    final headingStyle = Theme.of(context).textTheme.titleLarge?.copyWith(
-      fontSize: 30 * fontScale,
-      height: 1.24,
-      fontWeight: FontWeight.w700,
+    final headingStyle = _applyReaderFont(
+      Theme.of(context).textTheme.titleLarge?.copyWith(
+            fontSize: 30 * fontScale,
+            height: 1.24,
+            fontWeight: FontWeight.w700,
+          ) ??
+          TextStyle(
+            fontSize: 30 * fontScale,
+            height: 1.24,
+            fontWeight: FontWeight.w700,
+          ),
+      readerFontFamily,
     );
 
-    final quoteStyle = bodyStyle?.copyWith(
+    final quoteStyle = bodyStyle.copyWith(
       fontStyle: FontStyle.italic,
       color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.84),
     );
 
     final baseStyle = switch (parsed.kind) {
-      _ParagraphKind.heading => headingStyle,
-      _ParagraphKind.quote => quoteStyle,
-      _ParagraphKind.listItem => bodyStyle,
-      _ParagraphKind.body => bodyStyle,
+      ReaderParagraphKind.heading => headingStyle,
+      ReaderParagraphKind.quote => quoteStyle,
+      ReaderParagraphKind.listItem => bodyStyle,
+      ReaderParagraphKind.body => bodyStyle,
     };
+
+    final resolvedStyle = baseStyle;
+    final paragraphTextAlign = parsed.kind == ReaderParagraphKind.heading
+        ? TextAlign.start
+        : _resolveTextAlign(readerTextAlignment);
+
+    if (parsed.kind == ReaderParagraphKind.listItem) {
+      final bulletColor = Theme.of(
+        context,
+      ).colorScheme.onSurface.withValues(alpha: 0.9);
+
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              '•',
+              style: resolvedStyle.copyWith(
+                fontWeight: FontWeight.w700,
+                color: bulletColor,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: SelectableText.rich(
+              TextSpan(
+                children: _buildSpansForText(
+                  context,
+                  text: parsed.text,
+                  baseStyle: resolvedStyle,
+                  highlights: highlights
+                      .map((item) => item.snippet)
+                      .toList(growable: false),
+                ),
+              ),
+              textAlign: paragraphTextAlign,
+              onSelectionChanged: (selection, cause) {
+                if (selection.isCollapsed || parsed.text.isEmpty) {
+                  return;
+                }
+
+                final start = selection.start.clamp(0, parsed.text.length);
+                final end = selection.end.clamp(0, parsed.text.length);
+                if (start >= end) {
+                  return;
+                }
+
+                final selected = parsed.text.substring(start, end).trim();
+                if (selected.isEmpty) {
+                  return;
+                }
+
+                if (selected != _selectedText) {
+                  setState(() => _selectedText = selected);
+                }
+              },
+              style: resolvedStyle,
+            ),
+          ),
+        ],
+      );
+    }
 
     final decoratedChild = SelectableText.rich(
       TextSpan(
         children: _buildSpansForText(
           context,
           text: parsed.text,
-          baseStyle: baseStyle ?? const TextStyle(),
+          baseStyle: resolvedStyle,
           highlights: highlights
               .map((item) => item.snippet)
               .toList(growable: false),
         ),
       ),
+      textAlign: paragraphTextAlign,
       onSelectionChanged: (selection, cause) {
         if (selection.isCollapsed || parsed.text.isEmpty) {
           return;
@@ -298,10 +394,10 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
           setState(() => _selectedText = selected);
         }
       },
-      style: baseStyle,
+      style: resolvedStyle,
     );
 
-    if (parsed.kind == _ParagraphKind.quote) {
+    if (parsed.kind == ReaderParagraphKind.quote) {
       return Container(
         padding: const EdgeInsets.fromLTRB(14, 10, 0, 6),
         decoration: BoxDecoration(
@@ -319,28 +415,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     }
 
     return decoratedChild;
-  }
-
-  _ParsedParagraph _parseParagraph(String input) {
-    if (input.startsWith('## ')) {
-      return _ParsedParagraph(
-        _ParagraphKind.heading,
-        input.substring(3).trim(),
-      );
-    }
-
-    if (input.startsWith('> ')) {
-      return _ParsedParagraph(_ParagraphKind.quote, input.substring(2).trim());
-    }
-
-    if (input.startsWith('- ')) {
-      return _ParsedParagraph(
-        _ParagraphKind.listItem,
-        '• ${input.substring(2).trim()}',
-      );
-    }
-
-    return _ParsedParagraph(_ParagraphKind.body, input);
   }
 
   List<InlineSpan> _buildSpansForText(
@@ -753,73 +827,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     controller.dispose();
   }
 
-  List<String> _paragraphs(String plainText) {
-    final repaired = plainText
-        .replaceAll(RegExp(r'(?<!\n)\s##\s+'), '\n\n## ')
-        .replaceAll(RegExp(r'(?<!\n)\s>\s+'), '\n\n> ');
-
-    final blocks = repaired
-        .split(RegExp(r'\n{2,}'))
-        .map((p) => p.trim())
-        .where((p) => p.isNotEmpty)
-        .toList(growable: false);
-
-    if (blocks.isEmpty) {
-      return blocks;
-    }
-
-    final titleNormalized = widget.article.title
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
-        .trim();
-
-    return blocks
-        .where((block) {
-          if (RegExp(r'^[\-\u2013\u2014\s]{1,4}$').hasMatch(block)) {
-            return false;
-          }
-
-          if (RegExp(
-            r'^(https?://|www\.)',
-            caseSensitive: false,
-          ).hasMatch(block)) {
-            return false;
-          }
-
-          if (RegExp(r'^\[[^\]]+\]\(https?://[^\s)]+\)$').hasMatch(block)) {
-            return false;
-          }
-
-          final lower = block.toLowerCase();
-          if (lower.startsWith('by ') || lower.startsWith('published ')) {
-            return false;
-          }
-
-          // Filter "— Published ... — URL —" style footer lines.
-          final stripped = block
-              .replaceAll(RegExp(r'[\u2014\u2013\-]+'), '')
-              .trim()
-              .toLowerCase();
-          if (stripped.startsWith('published') &&
-              RegExp(r'https?://', caseSensitive: false).hasMatch(block)) {
-            return false;
-          }
-
-          // Deduplicate: body text that exactly matches the article title.
-          final blockNormalized =
-              (block.startsWith('## ') ? block.substring(3) : block)
-                  .toLowerCase()
-                  .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
-                  .trim();
-          if (blockNormalized == titleNormalized) {
-            return false;
-          }
-
-          return true;
-        })
-        .toList(growable: false);
-  }
-
   void _syncProgress() {
     final maxExtent = _scrollController.position.maxScrollExtent;
     if (maxExtent <= 0) {
@@ -836,29 +843,88 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   }
 
   Future<void> _showTypographySheet(BuildContext context) async {
-    final current = ref.read(readerFontScaleProvider);
-
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
       builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 30),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Reader Typography',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 16),
-              Text('Font Size', style: Theme.of(context).textTheme.labelLarge),
-              Consumer(
-                builder: (context, ref, child) {
-                  final scale = ref.watch(readerFontScaleProvider);
-                  return Slider(
-                    value: scale,
+        return Consumer(
+          builder: (context, ref, child) {
+            final settings = ref.watch(appSettingsProvider);
+            return SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 30),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Reader Typography',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Font Family',
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: ReaderFontFamily.values
+                        .map((font) {
+                          final selected = settings.readerFontFamily == font;
+                          return ChoiceChip(
+                            label: Text(
+                              _fontLabel(font),
+                              style: _applyReaderFont(
+                                Theme.of(context).textTheme.labelLarge ??
+                                    const TextStyle(),
+                                font,
+                              ),
+                            ),
+                            selected: selected,
+                            onSelected: (_) {
+                              ref
+                                  .read(appSettingsProvider.notifier)
+                                  .setReaderFontFamily(font);
+                            },
+                          );
+                        })
+                        .toList(growable: false),
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    'Paragraph Alignment',
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
+                  const SizedBox(height: 10),
+                  SegmentedButton<ReaderTextAlignment>(
+                    showSelectedIcon: false,
+                    segments: const [
+                      ButtonSegment(
+                        value: ReaderTextAlignment.left,
+                        label: Text('Left'),
+                        icon: Icon(Icons.format_align_left_rounded),
+                      ),
+                      ButtonSegment(
+                        value: ReaderTextAlignment.justified,
+                        label: Text('Justified'),
+                        icon: Icon(Icons.format_align_justify_rounded),
+                      ),
+                    ],
+                    selected: {settings.readerTextAlignment},
+                    onSelectionChanged: (selection) {
+                      ref
+                          .read(appSettingsProvider.notifier)
+                          .setReaderTextAlignment(selection.first);
+                    },
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    'Font Size',
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
+                  Slider(
+                    value: settings.readerFontScale,
                     min: 0.85,
                     max: 1.5,
                     divisions: 13,
@@ -867,18 +933,45 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                           .read(appSettingsProvider.notifier)
                           .setReaderFontScale(value);
                     },
-                  );
-                },
+                  ),
+                  Text(
+                    'Current scale: ${settings.readerFontScale.toStringAsFixed(2)}x',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ],
               ),
-              Text(
-                'Current scale: ${current.toStringAsFixed(2)}x',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
+  }
+
+  TextAlign _resolveTextAlign(ReaderTextAlignment alignment) {
+    return switch (alignment) {
+      ReaderTextAlignment.left => TextAlign.start,
+      ReaderTextAlignment.justified => TextAlign.justify,
+    };
+  }
+
+  String _fontLabel(ReaderFontFamily font) {
+    return switch (font) {
+      ReaderFontFamily.sourceSerif => 'Source Serif',
+      ReaderFontFamily.dmSans => 'DM Sans',
+      ReaderFontFamily.playfair => 'Playfair',
+    };
+  }
+
+  TextStyle _applyReaderFont(TextStyle style, ReaderFontFamily font) {
+    return switch (font) {
+      ReaderFontFamily.sourceSerif => GoogleFonts.sourceSerif4(
+        textStyle: style,
+      ),
+      ReaderFontFamily.dmSans => GoogleFonts.dmSans(textStyle: style),
+      ReaderFontFamily.playfair => GoogleFonts.playfairDisplay(
+        textStyle: style,
+      ),
+    };
   }
 
   Future<void> _saveHighlight(BuildContext context, String selectedText) async {
@@ -932,15 +1025,6 @@ class _Meta extends StatelessWidget {
     );
   }
 }
-
-class _ParsedParagraph {
-  const _ParsedParagraph(this.kind, this.text);
-
-  final _ParagraphKind kind;
-  final String text;
-}
-
-enum _ParagraphKind { heading, quote, listItem, body }
 
 class _TextRange {
   const _TextRange(this.start, this.end);

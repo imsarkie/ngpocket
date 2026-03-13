@@ -100,160 +100,91 @@ class ArticleSwipeCard extends StatelessWidget {
                 isDark: isDark,
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(0, 0, 0, 0),
-              child: Column(
-                children: [
-                  const Spacer(),
-                  AnimatedScale(
-                    duration: const Duration(milliseconds: 180),
-                    curve: Curves.easeOutCubic,
-                    scale: 1 - (swipeStrength * 0.016),
-                    child: Container(
-                      margin: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(22),
-                        border: Border.all(
-                          color: isDark
-                              ? Colors.white.withValues(alpha: 0.18)
-                              : colorScheme.outline.withValues(alpha: 0.22),
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            blurRadius: 24,
-                            spreadRadius: -6,
-                            color: Colors.black.withValues(
-                              alpha: isDark ? 0.45 : 0.14,
-                            ),
-                            offset: const Offset(0, 8),
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: AnimatedScale(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOutCubic,
+                scale: 1 - (swipeStrength * 0.016),
+                child: FractionallySizedBox(
+                  widthFactor: 1,
+                  heightFactor: 0.6,
+                  alignment: Alignment.bottomCenter,
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(28),
+                    ),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: isDark
+                                ? const [Color(0xE91A2530), Color(0xF2111820)]
+                                : const [Color(0xF8FFFFFF), Color(0xFFF1F6F8)],
                           ),
-                        ],
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(22),
-                        child: Stack(
-                          children: [
-                            Positioned.fill(
-                              child: imageUrl != null && imageUrl.isNotEmpty
-                                  ? CachedNetworkImage(
-                                      imageUrl: imageUrl,
-                                      fit: BoxFit.cover,
-                                      memCacheHeight: 1000,
-                                    )
-                                  : const DecoratedBox(
-                                      decoration: BoxDecoration(
-                                        gradient: LinearGradient(
-                                          colors: [
-                                            Color(0xFF1A7675),
-                                            Color(0xFF114F63),
-                                          ],
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
+                          border: Border(
+                            top: BorderSide(
+                              color: isDark
+                                  ? Colors.white.withValues(alpha: 0.16)
+                                  : colorScheme.outline.withValues(alpha: 0.2),
+                            ),
+                          ),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                article.title,
+                                maxLines: 8,
+                                overflow: TextOverflow.fade,
+                                style: GoogleFonts.playfairDisplay(
+                                  textStyle: Theme.of(context)
+                                      .textTheme
+                                      .headlineMedium
+                                      ?.copyWith(
+                                        color: isDark
+                                            ? Colors.white
+                                            : colorScheme.onSurface,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 40,
+                                        height: 1.05,
+                                      ),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              if (description.isNotEmpty)
+                                Text(
+                                  description,
+                                  maxLines: 4,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.dmSans(
+                                    textStyle: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                          color: isDark
+                                              ? Colors.white.withValues(
+                                                  alpha: 0.86,
+                                                )
+                                              : colorScheme.onSurface
+                                                    .withValues(alpha: 0.78),
+                                          fontSize: 16,
+                                          height: 1.45,
                                         ),
-                                      ),
-                                    ),
-                            ),
-                            Positioned.fill(
-                              child: BackdropFilter(
-                                filter: ImageFilter.blur(
-                                  sigmaX: 14,
-                                  sigmaY: 14,
-                                ),
-                                child: DecoratedBox(
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      begin: Alignment.topCenter,
-                                      end: Alignment.bottomCenter,
-                                      colors: [
-                                        isDark
-                                            ? Colors.black.withValues(
-                                                alpha: 0.48,
-                                              )
-                                            : Colors.white.withValues(
-                                                alpha: 0.7,
-                                              ),
-                                        isDark
-                                            ? Colors.black.withValues(
-                                                alpha: 0.72,
-                                              )
-                                            : Colors.white.withValues(
-                                                alpha: 0.82,
-                                              ),
-                                      ],
-                                    ),
                                   ),
                                 ),
-                              ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(
-                                20,
-                                22,
-                                20,
-                                20,
-                              ),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    article.title,
-                                    style: GoogleFonts.playfairDisplay(
-                                      textStyle: Theme.of(context)
-                                          .textTheme
-                                          .headlineMedium
-                                          ?.copyWith(
-                                            color: isDark
-                                                ? Colors.white
-                                                : colorScheme.onSurface,
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 28,
-                                            height: 1.18,
-                                            shadows: isDark
-                                                ? const [
-                                                    Shadow(
-                                                      blurRadius: 12,
-                                                      color: Color(0x66000000),
-                                                      offset: Offset(0, 2),
-                                                    ),
-                                                  ]
-                                                : null,
-                                          ),
-                                    ),
-                                  ),
-                                  if (description.isNotEmpty) ...[
-                                    const SizedBox(height: 12),
-                                    Text(
-                                      description,
-                                      maxLines: 3,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: GoogleFonts.dmSans(
-                                        textStyle: Theme.of(context)
-                                            .textTheme
-                                            .bodyMedium
-                                            ?.copyWith(
-                                              color: isDark
-                                                  ? Colors.white.withValues(
-                                                      alpha: 0.88,
-                                                    )
-                                                  : colorScheme.onSurface
-                                                        .withValues(alpha: 0.7),
-                                              fontSize: 15,
-                                              fontWeight: FontWeight.w400,
-                                              height: 1.45,
-                                            ),
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ],
+                ),
               ),
             ),
             if (horizontal > 0)

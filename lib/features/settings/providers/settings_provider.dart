@@ -25,6 +25,14 @@ class AppSettingsController extends Notifier<AppSettings> {
     state = state.copyWith(readerFontScale: scale.clamp(0.85, 1.5));
   }
 
+  void setReaderFontFamily(ReaderFontFamily fontFamily) {
+    state = state.copyWith(readerFontFamily: fontFamily);
+  }
+
+  void setReaderTextAlignment(ReaderTextAlignment alignment) {
+    state = state.copyWith(readerTextAlignment: alignment);
+  }
+
   void setParserEndpoint(String endpoint) {
     state = state.copyWith(parserEndpoint: endpoint.trim());
   }
