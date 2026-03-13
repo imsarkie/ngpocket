@@ -27,13 +27,15 @@ class ReaderScreen extends ConsumerStatefulWidget {
 class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   late final ScrollController _scrollController;
   late final String _plainText;
-  double _progress = 0;
+  late final List<String> _paragraphList;
+  late final ValueNotifier<double> _progressNotifier;
   String? _selectedText;
 
   @override
   void initState() {
     super.initState();
     _scrollController = ScrollController()..addListener(_syncProgress);
+    _progressNotifier = ValueNotifier(0.0);
 
     final content = widget.article.content.isEmpty
         ? (widget.article.description ?? widget.article.title)
@@ -42,6 +44,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     // Parsed/structured content already uses markdown-style markers (> , ## )
     // that would be destroyed by the HTML parser.
     _plainText = content.contains('<') ? htmlToPlainText(content) : content;
+    _paragraphList = _paragraphs(_plainText);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(
@@ -52,6 +55,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
   @override
   void dispose() {
+    _progressNotifier.dispose();
     _scrollController
       ..removeListener(_syncProgress)
       ..dispose();
@@ -61,7 +65,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   @override
   Widget build(BuildContext context) {
     final fontScale = ref.watch(readerFontScaleProvider);
-    final paragraphs = _paragraphs(_plainText);
     final highlightsAsync = ref.watch(
       articleHighlightsProvider(widget.article.id),
     );
@@ -98,12 +101,15 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(2),
-          child: LinearProgressIndicator(
-            value: _progress,
-            minHeight: 2,
-            backgroundColor: Theme.of(
-              context,
-            ).colorScheme.surfaceContainerHighest,
+          child: ValueListenableBuilder<double>(
+            valueListenable: _progressNotifier,
+            builder: (context, progress, _) => LinearProgressIndicator(
+              value: progress,
+              minHeight: 2,
+              backgroundColor: Theme.of(
+                context,
+              ).colorScheme.surfaceContainerHighest,
+            ),
           ),
         ),
       ),
@@ -148,7 +154,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                 ),
               ),
             ),
-      body: ListView(
+      body: ListView.builder(
         controller: _scrollController,
         padding: EdgeInsets.fromLTRB(
           24,
@@ -156,67 +162,76 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
           24,
           _selectedText == null ? 40 : 112,
         ),
-        children: [
-          Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 720),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (widget.article.image != null &&
-                      widget.article.image!.isNotEmpty)
-                    Hero(
-                      tag: 'article-image-${widget.article.id}',
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(22),
-                        child: CachedNetworkImage(
-                          imageUrl: widget.article.image!,
-                          fit: BoxFit.cover,
-                          height: 220,
+        itemCount: _paragraphList.length + 1,
+        itemBuilder: (context, index) {
+          if (index == 0) {
+            return Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 720),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (widget.article.image != null &&
+                        widget.article.image!.isNotEmpty)
+                      Hero(
+                        tag: 'article-image-${widget.article.id}',
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(22),
+                          child: CachedNetworkImage(
+                            imageUrl: widget.article.image!,
+                            fit: BoxFit.cover,
+                            height: 220,
+                          ),
                         ),
                       ),
-                    ),
-                  if (widget.article.image != null &&
-                      widget.article.image!.isNotEmpty)
-                    const SizedBox(height: 24),
-                  Text(
-                    widget.article.title,
-                    style: Theme.of(
-                      context,
-                    ).textTheme.headlineMedium?.copyWith(height: 1.22),
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 8,
-                    children: [
-                      if (widget.article.author != null &&
-                          widget.article.author!.isNotEmpty)
-                        _Meta(text: widget.article.author!),
-                      _Meta(text: '${widget.article.readingTime} min read'),
-                      if (widget.article.source != null &&
-                          widget.article.source!.isNotEmpty)
-                        _Meta(text: widget.article.source!),
-                      ...tags.map((tag) => _Meta(text: '#$tag')),
-                    ],
-                  ),
-                  const SizedBox(height: 28),
-                  ...paragraphs.map(
-                    (paragraph) => Padding(
-                      padding: const EdgeInsets.only(bottom: 22),
-                      child: _buildParagraph(
+                    if (widget.article.image != null &&
+                        widget.article.image!.isNotEmpty)
+                      const SizedBox(height: 24),
+                    Text(
+                      widget.article.title,
+                      style: Theme.of(
                         context,
-                        paragraph,
-                        fontScale,
-                        highlights,
-                      ),
+                      ).textTheme.headlineMedium?.copyWith(height: 1.22),
                     ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 8,
+                      children: [
+                        if (widget.article.author != null &&
+                            widget.article.author!.isNotEmpty)
+                          _Meta(text: widget.article.author!),
+                        _Meta(text: '${widget.article.readingTime} min read'),
+                        if (widget.article.source != null &&
+                            widget.article.source!.isNotEmpty)
+                          _Meta(text: widget.article.source!),
+                        ...tags.map((tag) => _Meta(text: '#$tag')),
+                      ],
+                    ),
+                    const SizedBox(height: 28),
+                  ],
+                ),
+              ),
+            );
+          }
+          final paragraph = _paragraphList[index - 1];
+          return Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 720),
+              child: RepaintBoundary(
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 22),
+                  child: _buildParagraph(
+                    context,
+                    paragraph,
+                    fontScale,
+                    highlights,
                   ),
-                ],
+                ),
               ),
             ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -808,15 +823,15 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   void _syncProgress() {
     final maxExtent = _scrollController.position.maxScrollExtent;
     if (maxExtent <= 0) {
-      if (_progress != 0) {
-        setState(() => _progress = 0);
+      if (_progressNotifier.value != 0) {
+        _progressNotifier.value = 0;
       }
       return;
     }
 
     final value = (_scrollController.offset / maxExtent).clamp(0.0, 1.0);
-    if ((value - _progress).abs() > 0.01) {
-      setState(() => _progress = value);
+    if ((value - _progressNotifier.value).abs() > 0.01) {
+      _progressNotifier.value = value;
     }
   }
 
