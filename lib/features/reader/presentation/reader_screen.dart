@@ -703,128 +703,12 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   }
 
   Future<void> _showTagsSheet(BuildContext context) async {
-    final controller = TextEditingController();
-    final actions = ref.read(readerActionsProvider);
-
     await showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
       showDragHandle: true,
-      builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
-          child: Consumer(
-            builder: (context, ref, child) {
-              final articleTags =
-                  ref
-                      .watch(articleTagsProvider(widget.article.id))
-                      .valueOrNull ??
-                  const <String>[];
-              final suggestions =
-                  ref.watch(tagSuggestionsProvider).valueOrNull ??
-                  const <String>[];
-
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Tags', style: Theme.of(context).textTheme.titleLarge),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: controller,
-                          textInputAction: TextInputAction.done,
-                          decoration: const InputDecoration(
-                            hintText: 'Add a tag',
-                            border: OutlineInputBorder(),
-                          ),
-                          onSubmitted: (value) async {
-                            await actions.addTag(
-                              articleId: widget.article.id,
-                              tag: value,
-                            );
-                            controller.clear();
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      FilledButton(
-                        onPressed: () async {
-                          await actions.addTag(
-                            articleId: widget.article.id,
-                            tag: controller.text,
-                          );
-                          controller.clear();
-                        },
-                        child: const Text('Add'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  if (articleTags.isNotEmpty)
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: articleTags
-                          .map(
-                            (tag) => InputChip(
-                              label: Text(tag),
-                              onDeleted: () {
-                                unawaited(
-                                  actions.removeTag(
-                                    articleId: widget.article.id,
-                                    tag: tag,
-                                  ),
-                                );
-                              },
-                            ),
-                          )
-                          .toList(growable: false),
-                    )
-                  else
-                    Text(
-                      'No tags yet for this article.',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  const SizedBox(height: 14),
-                  if (suggestions.isNotEmpty)
-                    Text(
-                      'Suggestions',
-                      style: Theme.of(context).textTheme.labelLarge,
-                    ),
-                  if (suggestions.isNotEmpty) const SizedBox(height: 8),
-                  if (suggestions.isNotEmpty)
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: suggestions
-                          .where((tag) => !articleTags.contains(tag))
-                          .take(12)
-                          .map(
-                            (tag) => ActionChip(
-                              label: Text(tag),
-                              onPressed: () {
-                                unawaited(
-                                  actions.addTag(
-                                    articleId: widget.article.id,
-                                    tag: tag,
-                                  ),
-                                );
-                              },
-                            ),
-                          )
-                          .toList(growable: false),
-                    ),
-                ],
-              );
-            },
-          ),
-        );
-      },
+      builder: (_) => _TagSheetBody(articleId: widget.article.id),
     );
-
-    controller.dispose();
   }
 
   void _syncProgress() {
@@ -1020,6 +904,152 @@ class _Meta extends StatelessWidget {
           style: Theme.of(
             context,
           ).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w500),
+        ),
+      ),
+    );
+  }
+}
+
+class _TagSheetBody extends ConsumerStatefulWidget {
+  const _TagSheetBody({required this.articleId});
+
+  final int articleId;
+
+  @override
+  ConsumerState<_TagSheetBody> createState() => _TagSheetBodyState();
+}
+
+class _TagSheetBodyState extends ConsumerState<_TagSheetBody> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final actions = ref.read(readerActionsProvider);
+    final articleTags =
+        ref.watch(articleTagsProvider(widget.articleId)).valueOrNull ??
+        const <String>[];
+    final suggestions =
+        ref.watch(tagSuggestionsProvider).valueOrNull ?? const <String>[];
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        16,
+        8,
+        16,
+        20 + MediaQuery.viewInsetsOf(context).bottom,
+      ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.78,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Tags', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _controller,
+                      textInputAction: TextInputAction.done,
+                      decoration: const InputDecoration(
+                        hintText: 'Add a tag',
+                        border: OutlineInputBorder(),
+                      ),
+                      onSubmitted: (value) async {
+                        await actions.addTag(
+                          articleId: widget.articleId,
+                          tag: value,
+                        );
+                        _controller.clear();
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed: () async {
+                      await actions.addTag(
+                        articleId: widget.articleId,
+                        tag: _controller.text,
+                      );
+                      _controller.clear();
+                    },
+                    child: const Text('Add'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              if (articleTags.isNotEmpty)
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: articleTags
+                      .map(
+                        (tag) => InputChip(
+                          label: Text(tag),
+                          onDeleted: () {
+                            unawaited(
+                              actions.removeTag(
+                                articleId: widget.articleId,
+                                tag: tag,
+                              ),
+                            );
+                          },
+                        ),
+                      )
+                      .toList(growable: false),
+                )
+              else
+                Text(
+                  'No tags yet for this article.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              const SizedBox(height: 14),
+              if (suggestions.isNotEmpty)
+                Text(
+                  'Suggestions',
+                  style: Theme.of(context).textTheme.labelLarge,
+                ),
+              if (suggestions.isNotEmpty) const SizedBox(height: 8),
+              if (suggestions.isNotEmpty)
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: suggestions
+                      .where((tag) => !articleTags.contains(tag))
+                      .take(12)
+                      .map(
+                        (tag) => ActionChip(
+                          label: Text(tag),
+                          onPressed: () {
+                            unawaited(
+                              actions.addTag(
+                                articleId: widget.articleId,
+                                tag: tag,
+                              ),
+                            );
+                          },
+                        ),
+                      )
+                      .toList(growable: false),
+                ),
+            ],
+          ),
         ),
       ),
     );

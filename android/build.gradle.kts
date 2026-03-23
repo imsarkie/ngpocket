@@ -43,6 +43,26 @@ subprojects {
             }
         }
     }
+
+    // AGP 8 requires every Android module to declare a namespace.
+    // Some third-party plugins (older versions) still omit this, so set a safe fallback.
+    afterEvaluate {
+        if (plugins.hasPlugin("com.android.library") || plugins.hasPlugin("com.android.application")) {
+            val androidExt = extensions.findByName("android") ?: return@afterEvaluate
+            try {
+                val getNamespace = androidExt.javaClass.getMethod("getNamespace")
+                val currentNamespace = getNamespace.invoke(androidExt) as String?
+
+                if (currentNamespace.isNullOrBlank()) {
+                    val setNamespace = androidExt.javaClass.getMethod("setNamespace", String::class.java)
+                    val fallbackNamespace = "com.example.${project.name.replace('-', '_')}"
+                    setNamespace.invoke(androidExt, fallbackNamespace)
+                }
+            } catch (_: Exception) {
+                // Ignore if this AGP type does not expose namespace accessors.
+            }
+        }
+    }
 }
 subprojects {
     project.evaluationDependsOn(":app")

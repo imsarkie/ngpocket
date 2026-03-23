@@ -17,44 +17,86 @@ class AppShell extends ConsumerStatefulWidget {
 
 class _AppShellState extends ConsumerState<AppShell> {
   int _currentIndex = 2;
-
-  final _tabs = const [
-    LibraryScreen(),
-    SwipeReaderScreen(),
-    ReadInboxScreen(),
-    SettingsScreen(),
-  ];
+  int _previousIndex = 2;
 
   @override
   Widget build(BuildContext context) {
     final unreadCountAsync = ref.watch(unreadCountProvider);
     final unreadCount = unreadCountAsync.valueOrNull ?? 0;
+    final hideBottomNav = _currentIndex == 1;
+    final navBarHeight = navBarHeightFor(context);
 
     final navBar = NgBottomNavBar(
       currentIndex: _currentIndex,
       unreadCount: unreadCount,
-      onTabSelected: (value) {
-        if (_currentIndex == value) {
-          return;
-        }
-
-        ref.read(hapticServiceProvider).selection();
-        setState(() => _currentIndex = value);
-      },
+      onTabSelected: _selectTab,
     );
 
-    return Scaffold(
-      extendBody: true,
-      bottomNavigationBar: navBar,
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 280),
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeInCubic,
-        child: KeyedSubtree(
-          key: ValueKey(_currentIndex),
-          child: _tabs[_currentIndex],
+    return PopScope(
+      canPop: _currentIndex != 1,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) {
+          return;
+        }
+        if (_currentIndex == 1) {
+          _exitSwipeReader();
+        }
+      },
+      child: Scaffold(
+        extendBody: false,
+        bottomNavigationBar: TweenAnimationBuilder<double>(
+          tween: Tween<double>(begin: 1, end: hideBottomNav ? 0 : 1),
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeOutCubic,
+          builder: (context, value, child) {
+            return SizedBox(
+              height: navBarHeight * value,
+              child: ClipRect(
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  heightFactor: value,
+                  child: Opacity(
+                    opacity: value,
+                    child: Transform.translate(
+                      offset: Offset(0, (1 - value) * 26),
+                      child: child,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+          child: navBar,
+        ),
+        body: IndexedStack(
+          index: _currentIndex,
+          children: [
+            const LibraryScreen(),
+            SwipeReaderScreen(onBackPressed: _exitSwipeReader),
+            const ReadInboxScreen(),
+            const SettingsScreen(),
+          ],
         ),
       ),
     );
+  }
+
+  void _selectTab(int value) {
+    if (_currentIndex == value) {
+      return;
+    }
+
+    ref.read(hapticServiceProvider).selection();
+    setState(() {
+      if (value == 1) {
+        _previousIndex = _currentIndex;
+      }
+      _currentIndex = value;
+    });
+  }
+
+  void _exitSwipeReader() {
+    final nextIndex = _previousIndex == 1 ? 2 : _previousIndex;
+    _selectTab(nextIndex);
   }
 }

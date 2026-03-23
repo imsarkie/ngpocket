@@ -38,7 +38,7 @@ class AppSettings {
   }
 
   static const defaults = AppSettings(
-    themeMode: ThemeMode.system,
+    themeMode: ThemeMode.light,
     readerFontScale: 1,
     readerFontFamily: ReaderFontFamily.sourceSerif,
     readerTextAlignment: ReaderTextAlignment.left,

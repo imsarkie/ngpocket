@@ -18,7 +18,7 @@ class LibraryScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Library')),
       body: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
         child: Column(
           children: [
             _LibraryFilterControl(
@@ -155,8 +155,6 @@ class LibraryScreen extends ConsumerWidget {
                             },
                             title: Text(
                               article.title,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
                               style: Theme.of(context).textTheme.titleMedium
                                   ?.copyWith(fontWeight: FontWeight.w700),
                             ),

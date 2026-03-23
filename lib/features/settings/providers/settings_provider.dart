@@ -12,13 +12,11 @@ class AppSettingsController extends Notifier<AppSettings> {
   AppSettings build() => AppSettings.defaults;
 
   void setThemeMode(ThemeMode mode) {
-    state = state.copyWith(themeMode: mode);
+    state = state.copyWith(themeMode: ThemeMode.light);
   }
 
   void setDarkMode(bool isDark) {
-    state = state.copyWith(
-      themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
-    );
+    state = state.copyWith(themeMode: ThemeMode.light);
   }
 
   void setReaderFontScale(double scale) {

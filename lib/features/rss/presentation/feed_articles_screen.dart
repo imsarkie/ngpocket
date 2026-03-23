@@ -65,8 +65,6 @@ class FeedArticlesScreen extends ConsumerWidget {
                     ),
                     title: Text(
                       article.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),

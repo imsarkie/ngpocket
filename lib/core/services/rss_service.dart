@@ -1,7 +1,7 @@
 import 'package:dio/dio.dart';
+import 'package:dart_rss/dart_rss.dart';
 import 'package:ngpocket/core/models/rss_preview.dart';
 import 'package:ngpocket/core/utils/html_cleaner.dart';
-import 'package:webfeed/domain/rss_feed.dart';
 
 class RssService {
   const RssService(this._dio);
@@ -15,15 +15,23 @@ class RssService {
         options: Options(responseType: ResponseType.plain),
       );
       final feed = RssFeed.parse(response.data ?? '');
-      final feedTitle = feed.title?.trim();
-      if (feedTitle != null && feedTitle.isNotEmpty) {
+      final feedTitle = (feed.title ?? '').trim();
+      if (feedTitle.isNotEmpty) {
         return feedTitle;
       }
     } catch (_) {
       // Fall back to host name when RSS metadata cannot be fetched.
     }
 
-    return Uri.tryParse(rssUrl)?.host.replaceFirst('www.', '') ?? rssUrl;
+    final parsed = Uri.tryParse(rssUrl);
+    if (parsed != null) {
+      final host = parsed.host.replaceFirst('www.', '');
+      if (host.isNotEmpty) {
+        return host;
+      }
+    }
+
+    return rssUrl;
   }
 
   Future<List<RssArticlePreview>> fetchArticles({
@@ -36,31 +44,42 @@ class RssService {
     );
 
     final feed = RssFeed.parse(response.data ?? '');
-    final source = feed.title?.trim().isNotEmpty == true
-        ? feed.title!.trim()
-        : sourceName;
+    final feedTitle = (feed.title ?? '').trim();
+    final source = feedTitle.isNotEmpty ? feedTitle : sourceName;
 
-    return (feed.items ?? const [])
-        .where(
-          (item) =>
-              (item.link ?? '').isNotEmpty && (item.title ?? '').isNotEmpty,
-        )
-        .map(
-          (item) => RssArticlePreview(
-            title: item.title!.trim(),
-            url: item.link!.trim(),
+    return feed.items
+        .where((item) {
+          final link = item.link?.trim() ?? '';
+          final title = item.title?.trim() ?? '';
+          return link.isNotEmpty && title.isNotEmpty;
+        })
+        .map((item) {
+          final title = item.title?.trim() ?? '';
+          final link = item.link?.trim() ?? '';
+          final fallbackContent = item.content?.toString() ?? '';
+          final description = item.description?.toString() ?? '';
+          final rawBody = description.isNotEmpty
+              ? description
+              : fallbackContent;
+
+          return RssArticlePreview(
+            title: title,
+            url: link,
             source: source,
-            description: extractDescription(
-              item.description ?? item.content?.value ?? '',
-            ),
-            publishedAt: item.pubDate,
-            image: _extractImage(
-              item.description ?? item.content?.value ?? '',
-              item.enclosure?.url,
-            ),
-          ),
-        )
+            description: extractDescription(rawBody),
+            publishedAt: _parsePublishedAt(item.pubDate?.toString()),
+            image: _extractImage(rawBody, item.enclosure?.url?.toString()),
+          );
+        })
         .toList(growable: false);
+  }
+
+  DateTime? _parsePublishedAt(String? input) {
+    if (input == null || input.trim().isEmpty) {
+      return null;
+    }
+
+    return DateTime.tryParse(input);
   }
 
   String? _extractImage(String html, String? enclosureUrl) {

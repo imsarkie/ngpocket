@@ -2,10 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:ngpocket/core/services/background_sync_service.dart';
 import 'package:ngpocket/core/services/service_providers.dart';
 import 'package:ngpocket/core/theme/app_theme.dart';
 import 'package:ngpocket/features/feed/providers/feed_provider.dart';
-import 'package:ngpocket/features/settings/providers/settings_provider.dart';
 import 'package:ngpocket/widgets/app_shell.dart';
 
 void main() {
@@ -27,6 +27,7 @@ class _NgPocketAppState extends ConsumerState<NgPocketApp> {
   void initState() {
     super.initState();
     _listenToIncomingShares();
+    unawaited(_initializeBackgroundSync());
   }
 
   @override
@@ -37,14 +38,11 @@ class _NgPocketAppState extends ConsumerState<NgPocketApp> {
 
   @override
   Widget build(BuildContext context) {
-    final settings = ref.watch(appSettingsProvider);
-
     return MaterialApp(
       title: 'ngpocket',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
-      darkTheme: AppTheme.dark(),
-      themeMode: settings.themeMode,
+      themeMode: ThemeMode.light,
       home: const AppShell(),
     );
   }
@@ -60,6 +58,14 @@ class _NgPocketAppState extends ConsumerState<NgPocketApp> {
     final initialUrl = await shareService.getInitialSharedUrl();
     if (initialUrl != null) {
       await feedActions.ingestSharedUrl(initialUrl);
+    }
+  }
+
+  Future<void> _initializeBackgroundSync() async {
+    try {
+      await BackgroundSyncService.initializeAndSchedule();
+    } catch (_) {
+      // Keep app startup resilient if background scheduling fails.
     }
   }
 }

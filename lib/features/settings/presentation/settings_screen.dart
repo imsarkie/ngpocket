@@ -46,29 +46,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Theme',
+                  'Color Palette',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(height: 12),
-                SegmentedButton<ThemeMode>(
-                  showSelectedIcon: false,
-                  segments: const [
-                    ButtonSegment(value: ThemeMode.light, label: Text('Light')),
-                    ButtonSegment(
-                      value: ThemeMode.system,
-                      label: Text('System'),
-                    ),
-                    ButtonSegment(value: ThemeMode.dark, label: Text('Dark')),
-                  ],
-                  selected: {settings.themeMode},
-                  onSelectionChanged: (selection) {
-                    ref.read(hapticServiceProvider).selection();
-                    ref
-                        .read(appSettingsProvider.notifier)
-                        .setThemeMode(selection.first);
-                  },
+                const SizedBox(height: 8),
+                Text(
+                  'Vintage mode is now fixed across the app with Clay, Beige, Sage, and Mist Blue accents.',
+                  style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ],
             ),
