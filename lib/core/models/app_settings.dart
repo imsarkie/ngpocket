@@ -11,6 +11,8 @@ class AppSettings {
     required this.readerFontFamily,
     required this.readerTextAlignment,
     required this.parserEndpoint,
+    required this.morningSyncNotificationsEnabled,
+    required this.unreadNotificationThreshold,
   });
 
   final ThemeMode themeMode;
@@ -18,6 +20,8 @@ class AppSettings {
   final ReaderFontFamily readerFontFamily;
   final ReaderTextAlignment readerTextAlignment;
   final String parserEndpoint;
+  final bool morningSyncNotificationsEnabled;
+  final int unreadNotificationThreshold;
 
   bool get isDarkMode => themeMode == ThemeMode.dark;
 
@@ -27,6 +31,8 @@ class AppSettings {
     ReaderFontFamily? readerFontFamily,
     ReaderTextAlignment? readerTextAlignment,
     String? parserEndpoint,
+    bool? morningSyncNotificationsEnabled,
+    int? unreadNotificationThreshold,
   }) {
     return AppSettings(
       themeMode: themeMode ?? this.themeMode,
@@ -34,6 +40,11 @@ class AppSettings {
       readerFontFamily: readerFontFamily ?? this.readerFontFamily,
       readerTextAlignment: readerTextAlignment ?? this.readerTextAlignment,
       parserEndpoint: parserEndpoint ?? this.parserEndpoint,
+      morningSyncNotificationsEnabled:
+          morningSyncNotificationsEnabled ??
+          this.morningSyncNotificationsEnabled,
+      unreadNotificationThreshold:
+          unreadNotificationThreshold ?? this.unreadNotificationThreshold,
     );
   }
 
@@ -43,5 +54,7 @@ class AppSettings {
     readerFontFamily: ReaderFontFamily.sourceSerif,
     readerTextAlignment: ReaderTextAlignment.left,
     parserEndpoint: '',
+    morningSyncNotificationsEnabled: true,
+    unreadNotificationThreshold: 5,
   );
 }

@@ -16,14 +16,24 @@ class AppShell extends ConsumerStatefulWidget {
 }
 
 class _AppShellState extends ConsumerState<AppShell> {
-  int _currentIndex = 2;
-  int _previousIndex = 2;
+  int _currentIndex = 0;
+  int _previousIndex = 0;
+  PageController? _pageController;
+
+  PageController get _safePageController {
+    return _pageController ??= PageController(initialPage: _currentIndex);
+  }
+
+  @override
+  void dispose() {
+    _pageController?.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final unreadCountAsync = ref.watch(unreadCountProvider);
     final unreadCount = unreadCountAsync.valueOrNull ?? 0;
-    final hideBottomNav = _currentIndex == 1;
     final navBarHeight = navBarHeightFor(context);
 
     final navBar = NgBottomNavBar(
@@ -45,7 +55,7 @@ class _AppShellState extends ConsumerState<AppShell> {
       child: Scaffold(
         extendBody: false,
         bottomNavigationBar: TweenAnimationBuilder<double>(
-          tween: Tween<double>(begin: 1, end: hideBottomNav ? 0 : 1),
+          tween: Tween<double>(begin: 1, end: 1),
           duration: const Duration(milliseconds: 280),
           curve: Curves.easeOutCubic,
           builder: (context, value, child) {
@@ -68,8 +78,11 @@ class _AppShellState extends ConsumerState<AppShell> {
           },
           child: navBar,
         ),
-        body: IndexedStack(
-          index: _currentIndex,
+        body: PageView(
+          controller: _safePageController,
+          // Navigation is controlled only by the bottom navbar interactions.
+          physics: const NeverScrollableScrollPhysics(),
+          onPageChanged: _onPageChanged,
           children: [
             const LibraryScreen(),
             SwipeReaderScreen(onBackPressed: _exitSwipeReader),
@@ -87,16 +100,40 @@ class _AppShellState extends ConsumerState<AppShell> {
     }
 
     ref.read(hapticServiceProvider).selection();
+
+    final previousBeforeChange = _currentIndex;
+
+    if (value == 1) {
+      _previousIndex = previousBeforeChange;
+    }
+
     setState(() {
-      if (value == 1) {
-        _previousIndex = _currentIndex;
-      }
       _currentIndex = value;
     });
+
+    if (!_safePageController.hasClients) {
+      return;
+    }
+
+    // Keep transitions instant after tab selection to avoid drag-time lag.
+    _safePageController.jumpToPage(value);
   }
 
   void _exitSwipeReader() {
-    final nextIndex = _previousIndex == 1 ? 2 : _previousIndex;
+    final nextIndex = _previousIndex == 1 ? 0 : _previousIndex;
     _selectTab(nextIndex);
+  }
+
+  void _onPageChanged(int index) {
+    if (index == _currentIndex) {
+      return;
+    }
+
+    setState(() {
+      if (index == 1) {
+        _previousIndex = _currentIndex;
+      }
+      _currentIndex = index;
+    });
   }
 }

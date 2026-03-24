@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:ngpocket/widgets/unread_badge.dart';
 
@@ -12,17 +14,72 @@ double navBarHeightFor(BuildContext context) {
   return railHeight + (verticalInset * 2) + bottomInset;
 }
 
-class NgBottomNavBar extends StatelessWidget {
+class NgBottomNavBar extends StatefulWidget {
   const NgBottomNavBar({
     super.key,
     required this.currentIndex,
     required this.unreadCount,
     required this.onTabSelected,
+    this.onDragProgress,
+    this.onDragRelease,
   });
 
   final int currentIndex;
   final int unreadCount;
   final ValueChanged<int> onTabSelected;
+  final ValueChanged<double>? onDragProgress;
+  final void Function(int index, double velocityX)? onDragRelease;
+
+  @override
+  State<NgBottomNavBar> createState() => _NgBottomNavBarState();
+}
+
+class _NgBottomNavBarState extends State<NgBottomNavBar> {
+  static const double _dragIntentThreshold = 10;
+  static const double _flingVelocityThreshold = 760;
+
+  bool _isDraggingSelector = false;
+  double? _dragLocalDx;
+  double? _dragStartDx;
+
+  int _indexFromDx(double localDx, double width, int itemCount) {
+    if (width <= 0) {
+      return widget.currentIndex;
+    }
+    final raw = (localDx / width * itemCount).floor();
+    return raw.clamp(0, itemCount - 1);
+  }
+
+  double _selectorLeftFromDx(
+    double localDx,
+    double indicatorWidth,
+    double maxLeft,
+  ) {
+    final left = localDx - (indicatorWidth / 2);
+    return left.clamp(0, maxLeft);
+  }
+
+  double _pageProgressFromDx(double localDx, double width, int itemCount) {
+    if (width <= 0) {
+      return widget.currentIndex.toDouble();
+    }
+    final clampedDx = localDx.clamp(0, width);
+    final normalized = clampedDx / width;
+    return normalized * (itemCount - 1);
+  }
+
+  int _releaseIndexWithVelocity({
+    required int nearestIndex,
+    required double velocityX,
+    required int itemCount,
+  }) {
+    if (velocityX.abs() < _flingVelocityThreshold) {
+      return nearestIndex;
+    }
+
+    final flingDirection = velocityX.isNegative ? -1 : 1;
+    return (nearestIndex + flingDirection).clamp(0, itemCount - 1);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -63,58 +120,208 @@ class NgBottomNavBar extends StatelessWidget {
                 builder: (context, constraints) {
                   const itemCount = 4;
                   const indicatorInset = 2.0;
-                  final indicatorWidth =
-                      (constraints.maxWidth - (indicatorInset * 2)) / itemCount;
+                  final rawRailWidth =
+                      constraints.maxWidth - (indicatorInset * 2);
+                  final railWidth = math.max(0.0, rawRailWidth);
+                  final indicatorWidth = railWidth / itemCount;
+                  final maxLeft = math.max(0.0, railWidth - indicatorWidth);
 
-                  return Stack(
-                    children: [
-                      AnimatedPositioned(
-                        duration: const Duration(milliseconds: 320),
-                        curve: Curves.easeInOutCubicEmphasized,
-                        left: indicatorInset + (indicatorWidth * currentIndex),
-                        top: indicatorInset,
-                        bottom: indicatorInset,
-                        width: indicatorWidth,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                            color: colorScheme.primary.withValues(alpha: 0.2),
-                            border: Border.all(
-                              color: colorScheme.primary.withValues(alpha: 0.3),
+                  final minDragDx = indicatorInset;
+                  final maxDragDx = math.max(
+                    minDragDx,
+                    constraints.maxWidth - indicatorInset,
+                  );
+
+                  final dragDx = (_dragLocalDx ?? 0).clamp(
+                    minDragDx,
+                    maxDragDx,
+                  );
+
+                  final pageProgress = _pageProgressFromDx(
+                    dragDx - indicatorInset,
+                    railWidth,
+                    itemCount,
+                  );
+
+                  final previewIndex = _isDraggingSelector
+                      ? _indexFromDx(
+                          dragDx - indicatorInset,
+                          railWidth,
+                          itemCount,
+                        )
+                      : widget.currentIndex;
+
+                  final selectorLeft = _isDraggingSelector
+                      ? indicatorInset +
+                            _selectorLeftFromDx(
+                              dragDx - indicatorInset,
+                              indicatorWidth,
+                              maxLeft,
+                            )
+                      : indicatorInset + (indicatorWidth * widget.currentIndex);
+
+                  final pageFraction =
+                      pageProgress - pageProgress.floorToDouble();
+                  final centerAffinity = (1 - ((pageFraction - 0.5).abs() * 2))
+                      .clamp(0.0, 1.0);
+                  final stretchScale = _isDraggingSelector
+                      ? (1 + (0.11 * centerAffinity))
+                      : 1.0;
+                  final stretchedIndicatorWidth = indicatorWidth * stretchScale;
+                  final selectorCenterX = selectorLeft + (indicatorWidth / 2);
+                  final stretchedLeft =
+                      (selectorCenterX - (stretchedIndicatorWidth / 2))
+                          .clamp(indicatorInset, indicatorInset + maxLeft)
+                          .toDouble();
+
+                  return GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onHorizontalDragStart: (details) {
+                      _dragStartDx = details.localPosition.dx;
+
+                      setState(() {
+                        _isDraggingSelector = false;
+                        _dragLocalDx = null;
+                      });
+                    },
+                    onHorizontalDragUpdate: (details) {
+                      final startDx = _dragStartDx ?? details.localPosition.dx;
+                      final dragDelta = details.localPosition.dx - startDx;
+
+                      if (!_isDraggingSelector &&
+                          dragDelta.abs() < _dragIntentThreshold) {
+                        return;
+                      }
+
+                      final localDx =
+                          (details.localPosition.dx - indicatorInset).clamp(
+                            0.0,
+                            railWidth,
+                          );
+
+                      setState(() {
+                        _isDraggingSelector = true;
+                        _dragLocalDx = details.localPosition.dx;
+                      });
+
+                      widget.onDragProgress?.call(
+                        _pageProgressFromDx(localDx, railWidth, itemCount),
+                      );
+                    },
+                    onHorizontalDragEnd: (details) {
+                      if (!_isDraggingSelector) {
+                        _dragStartDx = null;
+                        return;
+                      }
+
+                      final nearestIndex = _indexFromDx(
+                        dragDx - indicatorInset,
+                        railWidth,
+                        itemCount,
+                      );
+                      final velocityX = details.primaryVelocity ?? 0;
+                      final targetIndex = _releaseIndexWithVelocity(
+                        nearestIndex: nearestIndex,
+                        velocityX: velocityX,
+                        itemCount: itemCount,
+                      );
+
+                      setState(() {
+                        _isDraggingSelector = false;
+                        _dragLocalDx = null;
+                        _dragStartDx = null;
+                      });
+
+                      widget.onDragRelease?.call(targetIndex, velocityX);
+                      if (widget.onDragRelease == null) {
+                        widget.onTabSelected(targetIndex);
+                      }
+                    },
+                    onHorizontalDragCancel: () {
+                      setState(() {
+                        _isDraggingSelector = false;
+                        _dragLocalDx = null;
+                        _dragStartDx = null;
+                      });
+                      widget.onDragProgress?.call(
+                        widget.currentIndex.toDouble(),
+                      );
+                    },
+                    child: Stack(
+                      children: [
+                        if (_isDraggingSelector)
+                          Positioned(
+                            left: stretchedLeft,
+                            top: indicatorInset,
+                            bottom: indicatorInset,
+                            width: stretchedIndicatorWidth,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                color: colorScheme.primary.withValues(
+                                  alpha: 0.2,
+                                ),
+                                border: Border.all(
+                                  color: colorScheme.primary.withValues(
+                                    alpha: 0.3,
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
+                        if (!_isDraggingSelector)
+                          AnimatedPositioned(
+                            duration: const Duration(milliseconds: 220),
+                            curve: Curves.easeOutCubic,
+                            left: selectorLeft,
+                            top: indicatorInset,
+                            bottom: indicatorInset,
+                            width: indicatorWidth,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                color: colorScheme.primary.withValues(
+                                  alpha: 0.2,
+                                ),
+                                border: Border.all(
+                                  color: colorScheme.primary.withValues(
+                                    alpha: 0.3,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        Row(
+                          children: [
+                            _LiquidNavButton(
+                              icon: Icons.bookmark_rounded,
+                              selected: previewIndex == 0,
+                              onTap: () => widget.onTabSelected(0),
+                            ),
+                            _LiquidNavButton(
+                              icon: Icons.auto_stories_rounded,
+                              selected: previewIndex == 1,
+                              highlighted: true,
+                              onTap: () => widget.onTabSelected(1),
+                            ),
+                            _LiquidNavButton(
+                              icon: Icons.format_list_bulleted_rounded,
+                              selected: previewIndex == 2,
+                              onTap: () => widget.onTabSelected(2),
+                              iconBuilder: (icon, color) => UnreadBadge(
+                                count: widget.unreadCount,
+                                child: Icon(icon, color: color),
+                              ),
+                            ),
+                            _LiquidNavButton(
+                              icon: Icons.settings_rounded,
+                              selected: previewIndex == 3,
+                              onTap: () => widget.onTabSelected(3),
+                            ),
+                          ],
                         ),
-                      ),
-                      Row(
-                        children: [
-                          _LiquidNavButton(
-                            icon: Icons.bookmark_rounded,
-                            selected: currentIndex == 0,
-                            onTap: () => onTabSelected(0),
-                          ),
-                          _LiquidNavButton(
-                            icon: Icons.auto_stories_rounded,
-                            selected: currentIndex == 1,
-                            highlighted: true,
-                            onTap: () => onTabSelected(1),
-                          ),
-                          _LiquidNavButton(
-                            icon: Icons.format_list_bulleted_rounded,
-                            selected: currentIndex == 2,
-                            onTap: () => onTabSelected(2),
-                            iconBuilder: (icon, color) => UnreadBadge(
-                              count: unreadCount,
-                              child: Icon(icon, color: color),
-                            ),
-                          ),
-                          _LiquidNavButton(
-                            icon: Icons.settings_rounded,
-                            selected: currentIndex == 3,
-                            onTap: () => onTabSelected(3),
-                          ),
-                        ],
-                      ),
-                    ],
+                      ],
+                    ),
                   );
                 },
               ),

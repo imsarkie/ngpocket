@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -93,8 +94,8 @@ class _SwipeReaderScreenState extends ConsumerState<SwipeReaderScreen> {
                               ),
                               backCardOffset: const Offset(0, 14),
                               maxAngle: 8,
-                              threshold: 62,
-                              duration: const Duration(milliseconds: 260),
+                              threshold: 72,
+                              duration: const Duration(milliseconds: 300),
                               scale: 0.95,
                               allowedSwipeDirection:
                                   const AllowedSwipeDirection.only(
@@ -181,13 +182,15 @@ class _SwipeReaderScreenState extends ConsumerState<SwipeReaderScreen> {
                         ),
                         if (articles.isNotEmpty) ...[
                           const SizedBox(height: 12),
-                          _SwipeActionBar(
-                            onRead: () =>
-                                _controller.swipe(CardSwiperDirection.left),
-                            onSave: () =>
-                                _controller.swipe(CardSwiperDirection.right),
-                            onNext: () =>
-                                _controller.swipe(CardSwiperDirection.top),
+                          _ActionBarEntrance(
+                            child: _SwipeActionBar(
+                              onRead: () =>
+                                  _controller.swipe(CardSwiperDirection.left),
+                              onSave: () =>
+                                  _controller.swipe(CardSwiperDirection.right),
+                              onNext: () =>
+                                  _controller.swipe(CardSwiperDirection.top),
+                            ),
                           ),
                         ],
                       ],
@@ -290,50 +293,122 @@ class _SwipeActionBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: colorScheme.outline.withValues(alpha: 0.38)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
-        child: Row(
-          children: [
-            Expanded(
-              child: _ActionButton(
-                onPressed: onRead,
-                icon: Icons.done_rounded,
-                label: 'Read',
-                tooltip: 'Mark as read',
-              ),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 7, sigmaY: 7),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: colorScheme.surface.withValues(alpha: 0.86),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: colorScheme.outline.withValues(alpha: 0.34),
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _ActionButton(
-                onPressed: onSave,
-                icon: Icons.bookmark_add_rounded,
-                label: 'Save',
-                tooltip: 'Save article',
+            boxShadow: [
+              BoxShadow(
+                color: colorScheme.primary.withValues(alpha: 0.12),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
               ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _ActionButton(
+                    onPressed: onRead,
+                    icon: Icons.done_rounded,
+                    label: 'Read',
+                    tooltip: 'Mark as read',
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _ActionButton(
+                    onPressed: onSave,
+                    icon: Icons.bookmark_add_rounded,
+                    label: 'Save',
+                    tooltip: 'Save article',
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _ActionButton(
+                    onPressed: onNext,
+                    icon: Icons.skip_next_rounded,
+                    label: 'Next',
+                    tooltip: 'Skip to next article',
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _ActionButton(
-                onPressed: onNext,
-                icon: Icons.skip_next_rounded,
-                label: 'Next',
-                tooltip: 'Skip to next article',
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _ActionButton extends StatelessWidget {
+class _ActionBarEntrance extends StatefulWidget {
+  const _ActionBarEntrance({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_ActionBarEntrance> createState() => _ActionBarEntranceState();
+}
+
+class _ActionBarEntranceState extends State<_ActionBarEntrance>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _fade;
+  late final Animation<double> _scale;
+  late final Animation<Offset> _slide;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 420),
+    );
+
+    final curve = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOutBack,
+    );
+
+    _fade = CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic);
+    _scale = Tween<double>(begin: 0.94, end: 1).animate(curve);
+    _slide = Tween<Offset>(
+      begin: const Offset(0, 0.14),
+      end: Offset.zero,
+    ).animate(curve);
+
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _fade,
+      child: SlideTransition(
+        position: _slide,
+        child: ScaleTransition(scale: _scale, child: widget.child),
+      ),
+    );
+  }
+}
+
+class _ActionButton extends StatefulWidget {
   const _ActionButton({
     required this.onPressed,
     required this.icon,
@@ -347,27 +422,72 @@ class _ActionButton extends StatelessWidget {
   final String tooltip;
 
   @override
+  State<_ActionButton> createState() => _ActionButtonState();
+}
+
+class _ActionButtonState extends State<_ActionButton> {
+  bool _isPressed = false;
+
+  void _setPressed(bool value) {
+    if (_isPressed == value) {
+      return;
+    }
+
+    setState(() {
+      _isPressed = value;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Tooltip(
-      message: tooltip,
-      child: FilledButton.tonalIcon(
-        onPressed: onPressed,
-        style: FilledButton.styleFrom(
-          backgroundColor: colorScheme.surface,
-          foregroundColor: colorScheme.onSurfaceVariant,
-          side: BorderSide(color: colorScheme.outline.withValues(alpha: 0.3)),
-          elevation: 0,
-          shadowColor: Colors.transparent,
-          minimumSize: const Size.fromHeight(42),
-          visualDensity: VisualDensity.compact,
-          shape: RoundedRectangleBorder(
+      message: widget.tooltip,
+      child: AnimatedScale(
+        scale: _isPressed ? 0.95 : 1,
+        duration: const Duration(milliseconds: 140),
+        curve: Curves.easeOutCubic,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOutCubic,
+          decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: colorScheme.primary.withValues(
+                  alpha: _isPressed ? 0.05 : 0.14,
+                ),
+                blurRadius: _isPressed ? 4 : 10,
+                offset: Offset(0, _isPressed ? 1 : 4),
+              ),
+            ],
+          ),
+          child: Listener(
+            onPointerDown: (_) => _setPressed(true),
+            onPointerUp: (_) => _setPressed(false),
+            onPointerCancel: (_) => _setPressed(false),
+            child: FilledButton.tonalIcon(
+              onPressed: widget.onPressed,
+              style: FilledButton.styleFrom(
+                backgroundColor: colorScheme.surface,
+                foregroundColor: colorScheme.onSurfaceVariant,
+                side: BorderSide(
+                  color: colorScheme.outline.withValues(alpha: 0.3),
+                ),
+                elevation: 0,
+                shadowColor: Colors.transparent,
+                minimumSize: const Size.fromHeight(50),
+                visualDensity: VisualDensity.standard,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              icon: Icon(widget.icon, size: 18),
+              label: Text(widget.label),
+            ),
           ),
         ),
-        icon: Icon(icon, size: 18),
-        label: Text(label),
       ),
     );
   }

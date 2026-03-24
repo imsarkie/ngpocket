@@ -301,6 +301,48 @@ class AppDatabase extends _$AppDatabase {
     )..where((tbl) => tbl.url.equals(url))).getSingleOrNull();
   }
 
+  Future<Article?> findArticleById(int articleId) {
+    return (select(
+      articles,
+    )..where((tbl) => tbl.id.equals(articleId))).getSingleOrNull();
+  }
+
+  Future<int> countUnreadSavedArticles() async {
+    final countExpression = articles.id.count();
+    final query = selectOnly(articles)
+      ..addColumns([countExpression])
+      ..where(articles.saved.equals(true) & articles.read.equals(false));
+
+    final result = await query.getSingle();
+    return result.read(countExpression) ?? 0;
+  }
+
+  Future<Article?> findLatestUnreadSavedArticle() {
+    return (select(articles)
+          ..where((tbl) => tbl.saved.equals(true) & tbl.read.equals(false))
+          ..orderBy([
+            (tbl) => OrderingTerm(
+              expression: tbl.createdAt,
+              mode: OrderingMode.desc,
+            ),
+          ])
+          ..limit(1))
+        .getSingleOrNull();
+  }
+
+  Future<Article?> findLatestSavedArticle() {
+    return (select(articles)
+          ..where((tbl) => tbl.saved.equals(true))
+          ..orderBy([
+            (tbl) => OrderingTerm(
+              expression: tbl.createdAt,
+              mode: OrderingMode.desc,
+            ),
+          ])
+          ..limit(1))
+        .getSingleOrNull();
+  }
+
   Future<void> upsertFeedPreview({
     required String title,
     required String url,

@@ -132,6 +132,106 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ),
           const SizedBox(height: 18),
+          const _SectionHeading(title: 'Notifications'),
+          const SizedBox(height: 12),
+          _SectionCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SwitchListTile.adaptive(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(
+                    'Morning RSS sync alerts',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  subtitle: Text(
+                    'After sync, notify when unread library count reaches your threshold.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  value: settings.morningSyncNotificationsEnabled,
+                  onChanged: (enabled) async {
+                    final haptics = ref.read(hapticServiceProvider);
+                    haptics.selection();
+                    await ref
+                        .read(appSettingsProvider.notifier)
+                        .setMorningSyncNotificationsEnabled(enabled);
+
+                    if (!mounted) {
+                      return;
+                    }
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          enabled
+                              ? 'Morning sync notifications enabled.'
+                              : 'Morning sync notifications disabled.',
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Unread threshold: ${settings.unreadNotificationThreshold}',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 6),
+                Slider(
+                  value: settings.unreadNotificationThreshold.toDouble(),
+                  min: 3,
+                  max: 10,
+                  divisions: 7,
+                  label: '${settings.unreadNotificationThreshold}',
+                  onChanged: settings.morningSyncNotificationsEnabled
+                      ? (value) {
+                          ref.read(hapticServiceProvider).selection();
+                          ref
+                              .read(appSettingsProvider.notifier)
+                              .setUnreadNotificationThreshold(
+                                value.round(),
+                                persist: false,
+                              );
+                        }
+                      : null,
+                  onChangeEnd: settings.morningSyncNotificationsEnabled
+                      ? (value) async {
+                          final haptics = ref.read(hapticServiceProvider);
+                          haptics.medium();
+                          await ref
+                              .read(appSettingsProvider.notifier)
+                              .setUnreadNotificationThreshold(
+                                value.round(),
+                                persist: true,
+                                showTestNotification: true,
+                              );
+
+                          if (!mounted) {
+                            return;
+                          }
+
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Threshold saved to ${value.round()}. Test notification sent.',
+                              ),
+                            ),
+                          );
+                        }
+                      : null,
+                ),
+                Text(
+                  'Range: 3 to 10 unread saved articles.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
           const _SectionHeading(title: 'Parser'),
           const SizedBox(height: 12),
           _SectionCard(
