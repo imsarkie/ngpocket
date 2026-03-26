@@ -25,10 +25,10 @@ const String _kReadActionId = 'open_reader_action';
 const int _kSyncNotificationId = 1001;
 
 const AndroidNotificationChannel _syncChannel = AndroidNotificationChannel(
-  'rss_sync_channel',
+  'rss_sync_channel_v2',
   'RSS Sync',
   description: 'Notifications after automatic RSS synchronization.',
-  importance: Importance.defaultImportance,
+  importance: Importance.high,
 );
 
 @pragma('vm:entry-point')
@@ -90,7 +90,7 @@ void backgroundSyncCallbackDispatcher() {
 
       final prefs = await SharedPreferences.getInstance();
       final notificationsEnabled =
-          prefs.getBool(kSettingsMorningSyncNotificationsEnabledKey) ?? true;
+          prefs.getBool(kSettingsMorningSyncNotificationsEnabledKey) ?? false;
       final threshold = _sanitizeThreshold(
         prefs.getInt(kSettingsUnreadNotificationThresholdKey),
       );
@@ -160,7 +160,7 @@ class BackgroundSyncService {
     }
   }
 
-  static Future<void> setMorningSyncEnabled(
+  static Future<bool> setMorningSyncEnabled(
     bool enabled, {
     required bool requestPermissionWhenEnabling,
   }) async {
@@ -175,7 +175,13 @@ class BackgroundSyncService {
 
     if (!enabled) {
       await Workmanager().cancelByUniqueName(_kMorningRssSyncUniqueName);
-      return;
+      return false;
+    }
+
+    final notificationsAllowed = await _areNotificationsAllowed(notifications);
+    if (!notificationsAllowed) {
+      await Workmanager().cancelByUniqueName(_kMorningRssSyncUniqueName);
+      return false;
     }
 
     await Workmanager().registerPeriodicTask(
@@ -188,6 +194,8 @@ class BackgroundSyncService {
       backoffPolicy: BackoffPolicy.linear,
       backoffPolicyDelay: const Duration(minutes: 15),
     );
+
+    return true;
   }
 
   static Future<void> showTestUnreadNotification({
@@ -196,9 +204,14 @@ class BackgroundSyncService {
     final notifications = FlutterLocalNotificationsPlugin();
     await _initializeNotifications(
       notifications,
-      requestPermission: false,
+      requestPermission: true,
       registerResponseHandlers: true,
     );
+
+    final notificationsAllowed = await _areNotificationsAllowed(notifications);
+    if (!notificationsAllowed) {
+      return;
+    }
 
     final db = AppDatabase();
     try {
@@ -291,6 +304,18 @@ class BackgroundSyncService {
   }
 }
 
+Future<bool> _areNotificationsAllowed(
+  FlutterLocalNotificationsPlugin notifications,
+) async {
+  final androidPlugin = notifications
+      .resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin
+      >();
+
+  final enabled = await androidPlugin?.areNotificationsEnabled();
+  return enabled ?? true;
+}
+
 @pragma('vm:entry-point')
 void notificationTapBackground(NotificationResponse response) {
   BackgroundSyncService.handleNotificationResponse(response);
@@ -323,8 +348,10 @@ Future<void> _showUnreadLibraryNotification({
         _syncChannel.id,
         _syncChannel.name,
         channelDescription: _syncChannel.description,
-        importance: Importance.defaultImportance,
-        priority: Priority.defaultPriority,
+        importance: Importance.high,
+        priority: Priority.high,
+        category: AndroidNotificationCategory.recommendation,
+        visibility: NotificationVisibility.public,
         styleInformation: BigTextStyleInformation(body),
         actions: const <AndroidNotificationAction>[
           AndroidNotificationAction(

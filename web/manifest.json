@@ -1,6 +1,6 @@
 {
-    "name": "ngpocket",
-    "short_name": "ngpocket",
+    "name": "Reader",
+    "short_name": "Reader",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

@@ -38,10 +38,14 @@ class AppSettingsController extends Notifier<AppSettings> {
         unreadNotificationThreshold: unreadThreshold,
       );
 
-      await BackgroundSyncService.setMorningSyncEnabled(
+      final applied = await BackgroundSyncService.setMorningSyncEnabled(
         notificationsEnabled,
         requestPermissionWhenEnabling: false,
       );
+
+      if (notificationsEnabled && !applied) {
+        state = state.copyWith(morningSyncNotificationsEnabled: false);
+      }
     } catch (_) {
       // Keep settings resilient if local preference I/O fails.
     } finally {
@@ -75,7 +79,7 @@ class AppSettingsController extends Notifier<AppSettings> {
     state = state.copyWith(parserEndpoint: endpoint.trim());
   }
 
-  Future<void> setMorningSyncNotificationsEnabled(bool enabled) async {
+  Future<bool> setMorningSyncNotificationsEnabled(bool enabled) async {
     state = state.copyWith(morningSyncNotificationsEnabled: enabled);
 
     try {
@@ -85,10 +89,22 @@ class AppSettingsController extends Notifier<AppSettings> {
       // Ignore local write failures and keep in-memory state updated.
     }
 
-    await BackgroundSyncService.setMorningSyncEnabled(
+    final applied = await BackgroundSyncService.setMorningSyncEnabled(
       enabled,
       requestPermissionWhenEnabling: enabled,
     );
+
+    if (enabled && !applied) {
+      state = state.copyWith(morningSyncNotificationsEnabled: false);
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool(kSettingsMorningSyncNotificationsEnabledKey, false);
+      } catch (_) {
+        // Ignore local write failures and keep in-memory state updated.
+      }
+    }
+
+    return applied;
   }
 
   Future<void> setUnreadNotificationThreshold(

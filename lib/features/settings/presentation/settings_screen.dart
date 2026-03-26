@@ -154,22 +154,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   onChanged: (enabled) async {
                     final haptics = ref.read(hapticServiceProvider);
                     haptics.selection();
-                    await ref
+                    final applied = await ref
                         .read(appSettingsProvider.notifier)
                         .setMorningSyncNotificationsEnabled(enabled);
 
-                    if (!mounted) {
+                    if (!context.mounted) {
                       return;
                     }
 
+                    final message = !enabled
+                        ? 'Morning sync notifications disabled.'
+                        : applied
+                        ? 'Morning sync notifications enabled.'
+                        : 'Notification permission is blocked. Enable it in system settings.';
+
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          enabled
-                              ? 'Morning sync notifications enabled.'
-                              : 'Morning sync notifications disabled.',
-                        ),
-                      ),
+                      SnackBar(content: Text(message)),
                     );
                   },
                 ),
@@ -210,7 +210,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 showTestNotification: true,
                               );
 
-                          if (!mounted) {
+                          if (!context.mounted) {
                             return;
                           }
 

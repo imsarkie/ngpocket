@@ -54,7 +54,7 @@ class AppSettings {
     readerFontFamily: ReaderFontFamily.sourceSerif,
     readerTextAlignment: ReaderTextAlignment.left,
     parserEndpoint: '',
-    morningSyncNotificationsEnabled: true,
+    morningSyncNotificationsEnabled: false,
     unreadNotificationThreshold: 5,
   );
 }
