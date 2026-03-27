@@ -79,6 +79,19 @@ const _menuWords = {
   'pocket',
 };
 
+final _rxNbsp = RegExp(r'\u00A0');
+final _rxLineBreaks = RegExp(r'\r\n?');
+final _rxTrailingSpaces = RegExp(r'\n\s+');
+final _rxMultipleSpaces = RegExp(r'[ \t]{2,}');
+final _rxWhitespace = RegExp(r'\s+');
+final _rxHttpLink = RegExp(r'^(https?://|www\.)', caseSensitive: false);
+final _rxMarkdownLink = RegExp(r'^\[[^\]]+\]\(https?://[^\s)]+\)$');
+final _rxSeparatorLine = RegExp(r'^[\-\u2013\u2014\s]{1,4}$');
+final _rxWwwOrHttp = RegExp(r'^(www\.|https?://)', caseSensitive: false);
+final _rxDashes = RegExp(r'[\u2014\u2013\-]+');
+final _rxHttpOnly = RegExp(r'https?://', caseSensitive: false);
+final _rxHeadingStrip = RegExp(r'^#+\s*');
+
 String htmlToPlainText(String html) {
   final document = html_parser.parse(html);
   final text = document.body?.text ?? document.documentElement?.text ?? '';
@@ -194,10 +207,10 @@ String extractDescription(String htmlOrText, {int maxLength = 180}) {
 
 String _normalizeWhitespace(String text) {
   return text
-      .replaceAll(RegExp(r'\u00A0'), ' ')
-      .replaceAll(RegExp(r'\r\n?'), '\n')
-      .replaceAll(RegExp(r'\n\s+'), '\n')
-      .replaceAll(RegExp(r'[ \t]{2,}'), ' ')
+      .replaceAll(_rxNbsp, ' ')
+      .replaceAll(_rxLineBreaks, '\n')
+      .replaceAll(_rxTrailingSpaces, '\n')
+      .replaceAll(_rxMultipleSpaces, ' ')
       .trim();
 }
 
@@ -262,15 +275,15 @@ bool _isBoilerplateLine(String input) {
     return true;
   }
 
-  if (RegExp(r'^(https?://|www\.)', caseSensitive: false).hasMatch(lower)) {
+  if (_rxHttpLink.hasMatch(lower)) {
     return true;
   }
 
-  if (RegExp(r'^\[[^\]]+\]\(https?://[^\s)]+\)$').hasMatch(line)) {
+  if (_rxMarkdownLink.hasMatch(line)) {
     return true;
   }
 
-  if (RegExp(r'^[\-\u2013\u2014\s]{1,4}$').hasMatch(line)) {
+  if (_rxSeparatorLine.hasMatch(line)) {
     return true;
   }
 
@@ -278,7 +291,7 @@ bool _isBoilerplateLine(String input) {
     return true;
   }
 
-  final words = lower.split(RegExp(r'\s+'));
+  final words = lower.split(_rxWhitespace);
   if (words.length <= 3 && words.every((word) => _menuWords.contains(word))) {
     return true;
   }
@@ -388,7 +401,7 @@ Uri _cleanResolvedUrl(Uri uri) {
 }
 
 String? _sanitizeExtractedBlock(String text) {
-  final cleaned = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+  final cleaned = text.replaceAll(_rxWhitespace, ' ').trim();
   if (cleaned.isEmpty) {
     return null;
   }
@@ -397,21 +410,21 @@ String? _sanitizeExtractedBlock(String text) {
     return null;
   }
 
-  if (RegExp(r'^\[[^\]]+\]\(https?://[^\s)]+\)$').hasMatch(cleaned)) {
+  if (_rxMarkdownLink.hasMatch(cleaned)) {
     return null;
   }
 
-  if (RegExp(r'^(www\.|https?://)', caseSensitive: false).hasMatch(cleaned)) {
+  if (_rxWwwOrHttp.hasMatch(cleaned)) {
     return null;
   }
 
   // "— Published ... — URL —" style footer metadata.
   final dashStripped = cleaned
-      .replaceAll(RegExp(r'[\u2014\u2013\-]+'), '')
+      .replaceAll(_rxDashes, '')
       .trim()
       .toLowerCase();
   if (dashStripped.startsWith('published') &&
-      RegExp(r'https?://', caseSensitive: false).hasMatch(cleaned)) {
+      _rxHttpOnly.hasMatch(cleaned)) {
     return null;
   }
 
@@ -424,7 +437,7 @@ bool _isBylineLine(String text) {
 }
 
 String _normalizeHeadingCandidate(String input) {
-  return input.replaceAll(RegExp(r'^#+\s*'), '').trim();
+  return input.replaceAll(_rxHeadingStrip, '').trim();
 }
 
 bool _isLikelyLinkFarm(Element node) {

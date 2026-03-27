@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:ngpocket/core/database/app_database.dart';
-import 'package:ngpocket/features/rss/providers/rss_provider.dart';
-import 'package:ngpocket/widgets/loading_skeleton.dart';
+import 'package:reader/core/database/app_database.dart';
+import 'package:reader/features/rss/providers/rss_provider.dart';
+import 'package:reader/widgets/loading_skeleton.dart';
 
 class FeedArticlesScreen extends ConsumerWidget {
   const FeedArticlesScreen({super.key, required this.feed});

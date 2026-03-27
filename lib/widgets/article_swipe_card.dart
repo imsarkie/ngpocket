@@ -3,7 +3,10 @@ import 'dart:math' as math;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:ngpocket/core/database/app_database.dart';
+import 'package:reader/core/database/app_database.dart';
+import 'package:reader/features/feed/parsing/swipe_card_parser.dart';
+
+final String? _playfairFamily = GoogleFonts.playfairDisplay().fontFamily;
 
 class ArticleSwipeCard extends StatelessWidget {
   const ArticleSwipeCard({
@@ -21,6 +24,7 @@ class ArticleSwipeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final parsedCard = parseSwipeCardData(article);
     final colorScheme = Theme.of(context).colorScheme;
     final horizontal = (horizontalSwipePercent / 100)
         .clamp(-1.0, 1.0)
@@ -96,25 +100,21 @@ class ArticleSwipeCard extends StatelessWidget {
                                           children: [
                                             Text(
                                               article.title,
-                                              style:
-                                                  GoogleFonts.playfairDisplay(
-                                                    textStyle: Theme.of(context)
-                                                        .textTheme
-                                                        .headlineMedium
-                                                        ?.copyWith(
-                                                          color: colorScheme
-                                                              .onSurface,
-                                                          height: 1.08,
-                                                          fontWeight:
-                                                              FontWeight.w800,
-                                                        ),
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .headlineMedium
+                                                  ?.copyWith(
+                                                    fontFamily: _playfairFamily,
+                                                    color: colorScheme
+                                                        .onSurface,
+                                                    height: 1.08,
+                                                    fontWeight:
+                                                        FontWeight.w800,
                                                   ),
                                             ),
                                             const SizedBox(height: 6),
                                             Text(
-                                              _compactDescription(
-                                                article.description ?? '',
-                                              ),
+                                              parsedCard.description,
                                               style: Theme.of(context)
                                                   .textTheme
                                                   .bodyLarge
@@ -133,8 +133,9 @@ class ArticleSwipeCard extends StatelessWidget {
                                     ),
                                     const SizedBox(height: 10),
                                     _MetaRow(
-                                      source: article.source ?? 'Web',
-                                      readingTime: article.readingTime,
+                                      source: parsedCard.sourceLabel,
+                                      readingTime:
+                                          parsedCard.readingTimeMinutes,
                                     ),
                                   ],
                                 ),
@@ -174,19 +175,6 @@ class ArticleSwipeCard extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  String _compactDescription(String input) {
-    final text = input.trim();
-    if (text.isEmpty) {
-      return text;
-    }
-
-    final withoutMarkdownLinks = text.replaceAllMapped(
-      RegExp("\\[([^\\]]+)\\]\\(([^\\)]+)\\)"),
-      (match) => match.group(1) ?? '',
-    );
-    return withoutMarkdownLinks.replaceAll(RegExp('\\s+'), ' ').trim();
   }
 }
 

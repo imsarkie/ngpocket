@@ -12,7 +12,7 @@ class AppSettings {
     required this.readerTextAlignment,
     required this.parserEndpoint,
     required this.morningSyncNotificationsEnabled,
-    required this.unreadNotificationThreshold,
+    required this.libraryRemindersPerDay,
   });
 
   final ThemeMode themeMode;
@@ -21,7 +21,7 @@ class AppSettings {
   final ReaderTextAlignment readerTextAlignment;
   final String parserEndpoint;
   final bool morningSyncNotificationsEnabled;
-  final int unreadNotificationThreshold;
+  final int libraryRemindersPerDay;
 
   bool get isDarkMode => themeMode == ThemeMode.dark;
 
@@ -32,7 +32,7 @@ class AppSettings {
     ReaderTextAlignment? readerTextAlignment,
     String? parserEndpoint,
     bool? morningSyncNotificationsEnabled,
-    int? unreadNotificationThreshold,
+    int? libraryRemindersPerDay,
   }) {
     return AppSettings(
       themeMode: themeMode ?? this.themeMode,
@@ -43,8 +43,8 @@ class AppSettings {
       morningSyncNotificationsEnabled:
           morningSyncNotificationsEnabled ??
           this.morningSyncNotificationsEnabled,
-      unreadNotificationThreshold:
-          unreadNotificationThreshold ?? this.unreadNotificationThreshold,
+      libraryRemindersPerDay:
+          libraryRemindersPerDay ?? this.libraryRemindersPerDay,
     );
   }
 
@@ -55,6 +55,6 @@ class AppSettings {
     readerTextAlignment: ReaderTextAlignment.left,
     parserEndpoint: '',
     morningSyncNotificationsEnabled: false,
-    unreadNotificationThreshold: 5,
+    libraryRemindersPerDay: 3,
   );
 }

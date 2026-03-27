@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:ngpocket/core/services/service_providers.dart';
-import 'package:ngpocket/features/feed/presentation/read_inbox_screen.dart';
-import 'package:ngpocket/features/feed/presentation/swipe_reader_screen.dart';
-import 'package:ngpocket/features/feed/providers/feed_provider.dart';
-import 'package:ngpocket/features/library/presentation/library_screen.dart';
-import 'package:ngpocket/features/settings/presentation/settings_screen.dart';
-import 'package:ngpocket/widgets/ng_bottom_nav_bar.dart';
+import 'package:reader/core/services/service_providers.dart';
+import 'package:reader/features/feed/presentation/read_inbox_screen.dart';
+import 'package:reader/features/feed/presentation/swipe_reader_screen.dart';
+import 'package:reader/features/feed/providers/feed_provider.dart';
+import 'package:reader/features/library/presentation/library_screen.dart';
+import 'package:reader/features/settings/presentation/settings_screen.dart';
+import 'package:reader/widgets/ng_bottom_nav_bar.dart';
 
 class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key});

@@ -5,12 +5,12 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_card_swiper/flutter_card_swiper.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:ngpocket/core/database/app_database.dart';
-import 'package:ngpocket/core/services/service_providers.dart';
-import 'package:ngpocket/features/feed/providers/feed_provider.dart';
-import 'package:ngpocket/features/reader/presentation/reader_screen.dart';
-import 'package:ngpocket/widgets/article_swipe_card.dart';
-import 'package:ngpocket/widgets/loading_skeleton.dart';
+import 'package:reader/core/database/app_database.dart';
+import 'package:reader/core/services/service_providers.dart';
+import 'package:reader/features/feed/providers/feed_provider.dart';
+import 'package:reader/features/reader/presentation/reader_screen.dart';
+import 'package:reader/widgets/article_swipe_card.dart';
+import 'package:reader/widgets/loading_skeleton.dart';
 
 class SwipeReaderScreen extends ConsumerStatefulWidget {
   const SwipeReaderScreen({super.key, this.onBackPressed});

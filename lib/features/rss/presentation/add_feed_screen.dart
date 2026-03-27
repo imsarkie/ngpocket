@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:ngpocket/features/rss/providers/rss_provider.dart';
+import 'package:reader/features/rss/providers/rss_provider.dart';
 
 class AddFeedScreen extends ConsumerStatefulWidget {
   const AddFeedScreen({super.key});

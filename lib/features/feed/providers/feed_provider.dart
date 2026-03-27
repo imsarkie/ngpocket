@@ -2,14 +2,55 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:ngpocket/core/database/app_database.dart';
-import 'package:ngpocket/core/database/database_provider.dart';
-import 'package:ngpocket/core/services/service_providers.dart';
-import 'package:ngpocket/features/settings/providers/settings_provider.dart';
+import 'package:reader/core/database/app_database.dart';
+import 'package:reader/core/database/database_provider.dart';
+import 'package:reader/core/parsing/shared_article_parser.dart';
+import 'package:reader/core/services/service_providers.dart';
+import 'package:reader/features/settings/providers/settings_provider.dart';
 
 final inboxArticlesProvider = StreamProvider<List<Article>>((ref) {
   return ref.watch(appDatabaseProvider).watchInboxArticles();
 });
+
+// ---------------------------------------------------------------------------
+// Feed filter — drives the chip bar on the Read page
+// ---------------------------------------------------------------------------
+
+sealed class FeedFilter {
+  const FeedFilter();
+}
+
+class FeedFilterAll extends FeedFilter {
+  const FeedFilterAll();
+}
+
+class FeedFilterFolder extends FeedFilter {
+  const FeedFilterFolder(this.folderId, this.folderName);
+  final int folderId;
+  final String folderName;
+}
+
+class FeedFilterSource extends FeedFilter {
+  const FeedFilterSource(this.sourceName);
+  final String sourceName;
+}
+
+final feedFilterProvider =
+    StateProvider<FeedFilter>((ref) => const FeedFilterAll());
+
+/// Articles filtered by the active [feedFilterProvider] selection.
+final filteredInboxArticlesProvider = StreamProvider<List<Article>>((ref) {
+  final db = ref.watch(appDatabaseProvider);
+  final filter = ref.watch(feedFilterProvider);
+  return switch (filter) {
+    FeedFilterAll() => db.watchInboxArticles(),
+    FeedFilterFolder(:final folderId) =>
+      db.watchInboxArticlesByFolder(folderId),
+    FeedFilterSource(:final sourceName) =>
+      db.watchInboxArticlesBySource(sourceName),
+  };
+});
+
 
 final swipeQueueProvider = StreamProvider<List<Article>>((ref) {
   return ref.watch(appDatabaseProvider).watchSwipeQueue();
@@ -46,20 +87,23 @@ class FeedActions {
         article.url,
         parserEndpoint: settings.parserEndpoint,
       );
+      final payload = parseSharedArticleFromLink(
+        parsed,
+        requestedUrl: article.url,
+        markSaved: true,
+        sourceHint: article.source,
+      );
 
       await _db.saveParsedArticle(
-        title: parsed.title,
-        url: parsed.url,
-        content: parsed.content,
-        description: parsed.description,
-        readingTime: parsed.readingTime,
-        image: parsed.image,
-        author: parsed.author,
-        markSaved: true,
-        source:
-            article.source ??
-            Uri.tryParse(parsed.url)?.host ??
-            Uri.tryParse(article.url)?.host,
+        title: payload.title,
+        url: payload.url,
+        content: payload.content,
+        description: payload.description,
+        readingTime: payload.readingTime,
+        image: payload.image,
+        author: payload.author,
+        markSaved: payload.markSaved,
+        source: payload.source,
       );
     } catch (error, stackTrace) {
       debugPrint('saveAndScrapeArticle failed for ${article.url}: $error');
@@ -80,17 +124,22 @@ class FeedActions {
       url,
       parserEndpoint: settings.parserEndpoint,
     );
+    final payload = parseSharedArticleFromLink(
+      parsed,
+      requestedUrl: url,
+      markSaved: markSaved,
+    );
 
     await _db.saveParsedArticle(
-      title: parsed.title,
-      url: parsed.url,
-      content: parsed.content,
-      description: parsed.description,
-      readingTime: parsed.readingTime,
-      image: parsed.image,
-      author: parsed.author,
-      markSaved: markSaved,
-      source: Uri.tryParse(parsed.url)?.host,
+      title: payload.title,
+      url: payload.url,
+      content: payload.content,
+      description: payload.description,
+      readingTime: payload.readingTime,
+      image: payload.image,
+      author: payload.author,
+      markSaved: payload.markSaved,
+      source: payload.source,
     );
   }
 }

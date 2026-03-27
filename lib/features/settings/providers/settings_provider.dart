@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:ngpocket/core/models/app_settings.dart';
-import 'package:ngpocket/core/services/background_sync_service.dart';
+import 'package:reader/core/models/app_settings.dart';
+import 'package:reader/core/services/background_sync_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 final appSettingsProvider =
@@ -29,14 +29,20 @@ class AppSettingsController extends Notifier<AppSettings> {
       final notificationsEnabled =
           prefs.getBool(kSettingsMorningSyncNotificationsEnabledKey) ??
           AppSettings.defaults.morningSyncNotificationsEnabled;
-      final unreadThreshold = _sanitizeThreshold(
+      final reminders = _sanitizeRemindersPerDay(
         prefs.getInt(kSettingsUnreadNotificationThresholdKey),
       );
 
       state = state.copyWith(
         morningSyncNotificationsEnabled: notificationsEnabled,
-        unreadNotificationThreshold: unreadThreshold,
+        libraryRemindersPerDay: reminders,
       );
+
+      if (notificationsEnabled) {
+        await BackgroundSyncService.updateLibraryReminderTask(
+          _calculateInterval(reminders),
+        );
+      }
 
       final applied = await BackgroundSyncService.setMorningSyncEnabled(
         notificationsEnabled,
@@ -94,6 +100,14 @@ class AppSettingsController extends Notifier<AppSettings> {
       requestPermissionWhenEnabling: enabled,
     );
 
+    if (applied && enabled) {
+      await BackgroundSyncService.updateLibraryReminderTask(
+        _calculateInterval(state.libraryRemindersPerDay),
+      );
+    } else {
+      await BackgroundSyncService.updateLibraryReminderTask(null);
+    }
+
     if (enabled && !applied) {
       state = state.copyWith(morningSyncNotificationsEnabled: false);
       try {
@@ -107,13 +121,12 @@ class AppSettingsController extends Notifier<AppSettings> {
     return applied;
   }
 
-  Future<void> setUnreadNotificationThreshold(
-    int threshold, {
+  Future<void> setLibraryRemindersPerDay(
+    int count, {
     bool persist = true,
-    bool showTestNotification = false,
   }) async {
-    final sanitized = _sanitizeThreshold(threshold);
-    state = state.copyWith(unreadNotificationThreshold: sanitized);
+    final sanitized = _sanitizeRemindersPerDay(count);
+    state = state.copyWith(libraryRemindersPerDay: sanitized);
 
     if (persist) {
       try {
@@ -124,19 +137,22 @@ class AppSettingsController extends Notifier<AppSettings> {
       }
     }
 
-    if (showTestNotification) {
-      await BackgroundSyncService.showTestUnreadNotification(
-        threshold: sanitized,
+    if (state.morningSyncNotificationsEnabled) {
+      await BackgroundSyncService.updateLibraryReminderTask(
+        _calculateInterval(sanitized),
       );
     }
   }
 
-  int _sanitizeThreshold(int? threshold) {
-    final source =
-        threshold ?? AppSettings.defaults.unreadNotificationThreshold;
-    return source.clamp(
-      kMinUnreadNotificationThreshold,
-      kMaxUnreadNotificationThreshold,
-    );
+  int _sanitizeRemindersPerDay(int? count) {
+    final source = count ?? AppSettings.defaults.libraryRemindersPerDay;
+    return source.clamp(1, 10);
+  }
+
+  Duration _calculateInterval(int timesPerDay) {
+    // Determine the space in minutes between each notification
+    // e.g. 10 times a day = 144 minutes between drops.
+    final minutes = (24 * 60) ~/ timesPerDay;
+    return Duration(minutes: minutes);
   }
 }

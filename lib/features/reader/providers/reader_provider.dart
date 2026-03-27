@@ -1,10 +1,22 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:ngpocket/core/database/app_database.dart';
-import 'package:ngpocket/core/database/database_provider.dart';
-import 'package:ngpocket/core/models/app_settings.dart';
-import 'package:ngpocket/core/utils/html_cleaner.dart';
-import 'package:ngpocket/features/settings/providers/settings_provider.dart';
+import 'package:reader/core/database/app_database.dart';
+import 'package:reader/core/database/database_provider.dart';
+import 'package:reader/core/models/app_settings.dart';
+import 'package:reader/core/utils/html_cleaner.dart';
+import 'package:reader/features/settings/providers/settings_provider.dart';
+
+final _rxHeadingRepair = RegExp(r'(?<!\n)\s##\s+');
+final _rxQuoteRepair = RegExp(r'(?<!\n)\s>\s+');
+final _rxDoubleNewline = RegExp(r'\n{2,}');
+final _rxNonAlphanumeric = RegExp(r'[^a-z0-9]+');
+final _rxSeparator = RegExp(r'^[\-\u2013\u2014\s]{1,4}$');
+final _rxHttpOrWww = RegExp(r'^(https?://|www\.)', caseSensitive: false);
+final _rxMarkdownLink = RegExp(r'^\[[^\]]+\]\(https?://[^\s)]+\)$');
+final _rxDashes = RegExp(r'[\u2014\u2013\-]+');
+final _rxHttpOnly = RegExp(r'https?://', caseSensitive: false);
+final _rxBulletPoint = RegExp(r'^[•●▪◦]\s+');
+final _rxWhitespace = RegExp(r'\s+');
 
 final readerFontScaleProvider = Provider<double>((ref) {
   return ref.watch(appSettingsProvider).readerFontScale;
@@ -92,11 +104,11 @@ List<ReaderParagraph> _extractParagraphsForReader(
   String title,
 ) {
   final repaired = plainText
-      .replaceAll(RegExp(r'(?<!\n)\s##\s+'), '\n\n## ')
-      .replaceAll(RegExp(r'(?<!\n)\s>\s+'), '\n\n> ');
+      .replaceAll(_rxHeadingRepair, '\n\n## ')
+      .replaceAll(_rxQuoteRepair, '\n\n> ');
 
   final blocks = repaired
-      .split(RegExp(r'\n{2,}'))
+      .split(_rxDoubleNewline)
       .map(
         (p) => p
             .split('\n')
@@ -114,23 +126,20 @@ List<ReaderParagraph> _extractParagraphsForReader(
 
   final titleNormalized = title
       .toLowerCase()
-      .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+      .replaceAll(_rxNonAlphanumeric, ' ')
       .trim();
 
   return blocks
       .where((block) {
-        if (RegExp(r'^[\-\u2013\u2014\s]{1,4}$').hasMatch(block)) {
+        if (_rxSeparator.hasMatch(block)) {
           return false;
         }
 
-        if (RegExp(
-          r'^(https?://|www\.)',
-          caseSensitive: false,
-        ).hasMatch(block)) {
+        if (_rxHttpOrWww.hasMatch(block)) {
           return false;
         }
 
-        if (RegExp(r'^\[[^\]]+\]\(https?://[^\s)]+\)$').hasMatch(block)) {
+        if (_rxMarkdownLink.hasMatch(block)) {
           return false;
         }
 
@@ -140,18 +149,18 @@ List<ReaderParagraph> _extractParagraphsForReader(
         }
 
         final stripped = block
-            .replaceAll(RegExp(r'[\u2014\u2013\-]+'), '')
+            .replaceAll(_rxDashes, '')
             .trim()
             .toLowerCase();
         if (stripped.startsWith('published') &&
-            RegExp(r'https?://', caseSensitive: false).hasMatch(block)) {
+            _rxHttpOnly.hasMatch(block)) {
           return false;
         }
 
         final blockNormalized =
             (block.startsWith('## ') ? block.substring(3) : block)
                 .toLowerCase()
-                .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+                .replaceAll(_rxNonAlphanumeric, ' ')
                 .trim();
         if (blockNormalized == titleNormalized) {
           return false;
@@ -187,7 +196,7 @@ ReaderParagraph _parseReaderParagraph(String input) {
     );
   }
 
-  final bulletMatch = RegExp(r'^[•●▪◦]\s+').firstMatch(normalizedInput);
+  final bulletMatch = _rxBulletPoint.firstMatch(normalizedInput);
   if (bulletMatch != null) {
     return ReaderParagraph(
       kind: ReaderParagraphKind.listItem,
@@ -255,7 +264,7 @@ class ReaderActions {
     required int articleId,
     required String text,
   }) async {
-    final normalized = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final normalized = text.replaceAll(_rxWhitespace, ' ').trim();
     if (normalized.length < 6) {
       return HighlightSaveResult.emptySelection;
     }

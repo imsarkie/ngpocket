@@ -784,6 +784,17 @@ class $FeedsTable extends Feeds with TableInfo<$FeedsTable, Feed> {
     requiredDuringInsert: true,
     defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
   );
+  static const VerificationMeta _folderIdMeta = const VerificationMeta(
+    'folderId',
+  );
+  @override
+  late final GeneratedColumn<int> folderId = GeneratedColumn<int>(
+    'folder_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _lastUpdatedMeta = const VerificationMeta(
     'lastUpdated',
   );
@@ -812,6 +823,7 @@ class $FeedsTable extends Feeds with TableInfo<$FeedsTable, Feed> {
     id,
     name,
     rssUrl,
+    folderId,
     lastUpdated,
     createdAt,
   ];
@@ -845,6 +857,12 @@ class $FeedsTable extends Feeds with TableInfo<$FeedsTable, Feed> {
       );
     } else if (isInserting) {
       context.missing(_rssUrlMeta);
+    }
+    if (data.containsKey('folder_id')) {
+      context.handle(
+        _folderIdMeta,
+        folderId.isAcceptableOrUnknown(data['folder_id']!, _folderIdMeta),
+      );
     }
     if (data.containsKey('last_updated')) {
       context.handle(
@@ -882,6 +900,10 @@ class $FeedsTable extends Feeds with TableInfo<$FeedsTable, Feed> {
         DriftSqlType.string,
         data['${effectivePrefix}rss_url'],
       )!,
+      folderId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}folder_id'],
+      ),
       lastUpdated: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}last_updated'],
@@ -903,12 +925,16 @@ class Feed extends DataClass implements Insertable<Feed> {
   final int id;
   final String name;
   final String rssUrl;
+
+  /// Nullable FK to feed_folders — null means "Uncategorised".
+  final int? folderId;
   final DateTime? lastUpdated;
   final DateTime createdAt;
   const Feed({
     required this.id,
     required this.name,
     required this.rssUrl,
+    this.folderId,
     this.lastUpdated,
     required this.createdAt,
   });
@@ -918,6 +944,9 @@ class Feed extends DataClass implements Insertable<Feed> {
     map['id'] = Variable<int>(id);
     map['name'] = Variable<String>(name);
     map['rss_url'] = Variable<String>(rssUrl);
+    if (!nullToAbsent || folderId != null) {
+      map['folder_id'] = Variable<int>(folderId);
+    }
     if (!nullToAbsent || lastUpdated != null) {
       map['last_updated'] = Variable<DateTime>(lastUpdated);
     }
@@ -930,6 +959,9 @@ class Feed extends DataClass implements Insertable<Feed> {
       id: Value(id),
       name: Value(name),
       rssUrl: Value(rssUrl),
+      folderId: folderId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(folderId),
       lastUpdated: lastUpdated == null && nullToAbsent
           ? const Value.absent()
           : Value(lastUpdated),
@@ -946,6 +978,7 @@ class Feed extends DataClass implements Insertable<Feed> {
       id: serializer.fromJson<int>(json['id']),
       name: serializer.fromJson<String>(json['name']),
       rssUrl: serializer.fromJson<String>(json['rssUrl']),
+      folderId: serializer.fromJson<int?>(json['folderId']),
       lastUpdated: serializer.fromJson<DateTime?>(json['lastUpdated']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
@@ -957,6 +990,7 @@ class Feed extends DataClass implements Insertable<Feed> {
       'id': serializer.toJson<int>(id),
       'name': serializer.toJson<String>(name),
       'rssUrl': serializer.toJson<String>(rssUrl),
+      'folderId': serializer.toJson<int?>(folderId),
       'lastUpdated': serializer.toJson<DateTime?>(lastUpdated),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
@@ -966,12 +1000,14 @@ class Feed extends DataClass implements Insertable<Feed> {
     int? id,
     String? name,
     String? rssUrl,
+    Value<int?> folderId = const Value.absent(),
     Value<DateTime?> lastUpdated = const Value.absent(),
     DateTime? createdAt,
   }) => Feed(
     id: id ?? this.id,
     name: name ?? this.name,
     rssUrl: rssUrl ?? this.rssUrl,
+    folderId: folderId.present ? folderId.value : this.folderId,
     lastUpdated: lastUpdated.present ? lastUpdated.value : this.lastUpdated,
     createdAt: createdAt ?? this.createdAt,
   );
@@ -980,6 +1016,7 @@ class Feed extends DataClass implements Insertable<Feed> {
       id: data.id.present ? data.id.value : this.id,
       name: data.name.present ? data.name.value : this.name,
       rssUrl: data.rssUrl.present ? data.rssUrl.value : this.rssUrl,
+      folderId: data.folderId.present ? data.folderId.value : this.folderId,
       lastUpdated: data.lastUpdated.present
           ? data.lastUpdated.value
           : this.lastUpdated,
@@ -993,6 +1030,7 @@ class Feed extends DataClass implements Insertable<Feed> {
           ..write('id: $id, ')
           ..write('name: $name, ')
           ..write('rssUrl: $rssUrl, ')
+          ..write('folderId: $folderId, ')
           ..write('lastUpdated: $lastUpdated, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
@@ -1000,7 +1038,8 @@ class Feed extends DataClass implements Insertable<Feed> {
   }
 
   @override
-  int get hashCode => Object.hash(id, name, rssUrl, lastUpdated, createdAt);
+  int get hashCode =>
+      Object.hash(id, name, rssUrl, folderId, lastUpdated, createdAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1008,6 +1047,7 @@ class Feed extends DataClass implements Insertable<Feed> {
           other.id == this.id &&
           other.name == this.name &&
           other.rssUrl == this.rssUrl &&
+          other.folderId == this.folderId &&
           other.lastUpdated == this.lastUpdated &&
           other.createdAt == this.createdAt);
 }
@@ -1016,12 +1056,14 @@ class FeedsCompanion extends UpdateCompanion<Feed> {
   final Value<int> id;
   final Value<String> name;
   final Value<String> rssUrl;
+  final Value<int?> folderId;
   final Value<DateTime?> lastUpdated;
   final Value<DateTime> createdAt;
   const FeedsCompanion({
     this.id = const Value.absent(),
     this.name = const Value.absent(),
     this.rssUrl = const Value.absent(),
+    this.folderId = const Value.absent(),
     this.lastUpdated = const Value.absent(),
     this.createdAt = const Value.absent(),
   });
@@ -1029,6 +1071,7 @@ class FeedsCompanion extends UpdateCompanion<Feed> {
     this.id = const Value.absent(),
     required String name,
     required String rssUrl,
+    this.folderId = const Value.absent(),
     this.lastUpdated = const Value.absent(),
     this.createdAt = const Value.absent(),
   }) : name = Value(name),
@@ -1037,6 +1080,7 @@ class FeedsCompanion extends UpdateCompanion<Feed> {
     Expression<int>? id,
     Expression<String>? name,
     Expression<String>? rssUrl,
+    Expression<int>? folderId,
     Expression<DateTime>? lastUpdated,
     Expression<DateTime>? createdAt,
   }) {
@@ -1044,6 +1088,7 @@ class FeedsCompanion extends UpdateCompanion<Feed> {
       if (id != null) 'id': id,
       if (name != null) 'name': name,
       if (rssUrl != null) 'rss_url': rssUrl,
+      if (folderId != null) 'folder_id': folderId,
       if (lastUpdated != null) 'last_updated': lastUpdated,
       if (createdAt != null) 'created_at': createdAt,
     });
@@ -1053,6 +1098,7 @@ class FeedsCompanion extends UpdateCompanion<Feed> {
     Value<int>? id,
     Value<String>? name,
     Value<String>? rssUrl,
+    Value<int?>? folderId,
     Value<DateTime?>? lastUpdated,
     Value<DateTime>? createdAt,
   }) {
@@ -1060,6 +1106,7 @@ class FeedsCompanion extends UpdateCompanion<Feed> {
       id: id ?? this.id,
       name: name ?? this.name,
       rssUrl: rssUrl ?? this.rssUrl,
+      folderId: folderId ?? this.folderId,
       lastUpdated: lastUpdated ?? this.lastUpdated,
       createdAt: createdAt ?? this.createdAt,
     );
@@ -1077,6 +1124,9 @@ class FeedsCompanion extends UpdateCompanion<Feed> {
     if (rssUrl.present) {
       map['rss_url'] = Variable<String>(rssUrl.value);
     }
+    if (folderId.present) {
+      map['folder_id'] = Variable<int>(folderId.value);
+    }
     if (lastUpdated.present) {
       map['last_updated'] = Variable<DateTime>(lastUpdated.value);
     }
@@ -1092,6 +1142,7 @@ class FeedsCompanion extends UpdateCompanion<Feed> {
           ..write('id: $id, ')
           ..write('name: $name, ')
           ..write('rssUrl: $rssUrl, ')
+          ..write('folderId: $folderId, ')
           ..write('lastUpdated: $lastUpdated, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
@@ -2275,6 +2326,7 @@ typedef $$FeedsTableCreateCompanionBuilder =
       Value<int> id,
       required String name,
       required String rssUrl,
+      Value<int?> folderId,
       Value<DateTime?> lastUpdated,
       Value<DateTime> createdAt,
     });
@@ -2283,6 +2335,7 @@ typedef $$FeedsTableUpdateCompanionBuilder =
       Value<int> id,
       Value<String> name,
       Value<String> rssUrl,
+      Value<int?> folderId,
       Value<DateTime?> lastUpdated,
       Value<DateTime> createdAt,
     });
@@ -2307,6 +2360,11 @@ class $$FeedsTableFilterComposer extends Composer<_$AppDatabase, $FeedsTable> {
 
   ColumnFilters<String> get rssUrl => $composableBuilder(
     column: $table.rssUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get folderId => $composableBuilder(
+    column: $table.folderId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2345,6 +2403,11 @@ class $$FeedsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get folderId => $composableBuilder(
+    column: $table.folderId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get lastUpdated => $composableBuilder(
     column: $table.lastUpdated,
     builder: (column) => ColumnOrderings(column),
@@ -2373,6 +2436,9 @@ class $$FeedsTableAnnotationComposer
 
   GeneratedColumn<String> get rssUrl =>
       $composableBuilder(column: $table.rssUrl, builder: (column) => column);
+
+  GeneratedColumn<int> get folderId =>
+      $composableBuilder(column: $table.folderId, builder: (column) => column);
 
   GeneratedColumn<DateTime> get lastUpdated => $composableBuilder(
     column: $table.lastUpdated,
@@ -2414,12 +2480,14 @@ class $$FeedsTableTableManager
                 Value<int> id = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<String> rssUrl = const Value.absent(),
+                Value<int?> folderId = const Value.absent(),
                 Value<DateTime?> lastUpdated = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
               }) => FeedsCompanion(
                 id: id,
                 name: name,
                 rssUrl: rssUrl,
+                folderId: folderId,
                 lastUpdated: lastUpdated,
                 createdAt: createdAt,
               ),
@@ -2428,12 +2496,14 @@ class $$FeedsTableTableManager
                 Value<int> id = const Value.absent(),
                 required String name,
                 required String rssUrl,
+                Value<int?> folderId = const Value.absent(),
                 Value<DateTime?> lastUpdated = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
               }) => FeedsCompanion.insert(
                 id: id,
                 name: name,
                 rssUrl: rssUrl,
+                folderId: folderId,
                 lastUpdated: lastUpdated,
                 createdAt: createdAt,
               ),

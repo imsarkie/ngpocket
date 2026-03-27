@@ -1,16 +1,89 @@
+import 'dart:async';
+
 import 'package:dart_rss/dart_rss.dart';
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:ngpocket/core/database/app_database.dart';
-import 'package:ngpocket/core/database/database_provider.dart';
-import 'package:ngpocket/core/models/rss_preview.dart';
-import 'package:ngpocket/core/services/service_providers.dart';
-import 'package:ngpocket/core/utils/html_cleaner.dart';
-import 'package:ngpocket/core/utils/reading_time.dart';
-import 'package:ngpocket/features/settings/providers/settings_provider.dart';
+import 'package:reader/core/database/app_database.dart';
+import 'package:reader/core/database/database_provider.dart';
+import 'package:reader/core/models/rss_preview.dart';
+import 'package:reader/core/parsing/rss_content_parser.dart';
+import 'package:reader/core/services/service_providers.dart';
+import 'package:reader/core/utils/reading_time.dart';
+import 'package:reader/features/settings/providers/settings_provider.dart';
 
 final feedsProvider = StreamProvider<List<Feed>>((ref) {
   return ref.watch(appDatabaseProvider).watchFeeds();
+});
+
+/// Groups folders with their assigned feeds, plus an uncategorised bucket.
+/// Merges [watchFolders] and [watchFeeds] so it reacts to EITHER change.
+final foldersWithFeedsProvider =
+    StreamProvider<FoldersWithFeedsState>((ref) {
+  final db = ref.watch(appDatabaseProvider);
+
+  // We use a broadcast StreamController so we can feed it from two sources.
+  final sc = StreamController<FoldersWithFeedsState>.broadcast();
+
+  var _folders = <FolderRow>[];
+  var _feeds = <Feed>[];
+  var _ready = 0; // counts how many streams have emitted at least once
+
+  void _recompute() {
+    if (_ready < 2) return; // wait until both streams have initialised
+    final grouped = <int, List<Feed>>{};
+    final uncategorised = <Feed>[];
+    for (final feed in _feeds) {
+      final fid = feed.folderId;
+      if (fid == null) {
+        uncategorised.add(feed);
+      } else {
+        grouped.putIfAbsent(fid, () => []).add(feed);
+      }
+    }
+    final folderItems = _folders
+        .map((f) => FolderWithFeeds(folder: f, feeds: grouped[f.id] ?? const []))
+        .toList(growable: false);
+    if (!sc.isClosed) {
+      sc.add(FoldersWithFeedsState(
+        folders: folderItems,
+        uncategorised: uncategorised,
+      ));
+    }
+  }
+
+  var _folderFirst = true;
+  final folderSub = db.watchFolders().listen(
+    (folders) {
+      _folders = folders;
+      if (_folderFirst) {
+        _folderFirst = false;
+        _ready++;
+      }
+      _recompute();
+    },
+    onError: sc.addError,
+  );
+
+  var _feedFirst = true;
+  final feedSub = db.watchFeeds().listen(
+    (feeds) {
+      _feeds = feeds;
+      if (_feedFirst) {
+        _feedFirst = false;
+        _ready++;
+      }
+      _recompute();
+    },
+    onError: sc.addError,
+  );
+
+  ref.onDispose(() {
+    folderSub.cancel();
+    feedSub.cancel();
+    sc.close();
+  });
+
+  return sc.stream;
 });
 
 final feedArticlesProvider =
@@ -26,6 +99,27 @@ final feedArticlesProvider =
 final rssActionsProvider = Provider<RssActions>((ref) {
   return RssActions(ref);
 });
+
+// ---------------------------------------------------------------------------
+// Value objects
+// ---------------------------------------------------------------------------
+
+class FolderWithFeeds {
+  const FolderWithFeeds({required this.folder, required this.feeds});
+  final FolderRow folder;
+  final List<Feed> feeds;
+}
+
+class FoldersWithFeedsState {
+  const FoldersWithFeedsState({
+    required this.folders,
+    required this.uncategorised,
+  });
+  final List<FolderWithFeeds> folders;
+  final List<Feed> uncategorised;
+
+  bool get isEmpty => folders.isEmpty && uncategorised.isEmpty;
+}
 
 class RssActions {
   RssActions(this._ref);
@@ -74,13 +168,13 @@ class RssActions {
 
     // Prefer importing the local RSS/XML content directly. This avoids using
     // website homepage links (<link>) as feed URLs.
-    final parsedFeed = _tryParseFeed(trimmed);
+    final parsedFeed = tryParseRssDocument(trimmed);
     if (parsedFeed != null) {
       await _importParsedFeed(parsedFeed, sourceNameHint: sourceNameHint);
       return true;
     }
 
-    final feedUrl = _extractFeedUrlFromDocument(trimmed);
+    final feedUrl = extractFeedUrlFromRssDocument(trimmed);
     if (feedUrl != null) {
       try {
         await addFeed(feedUrl);
@@ -93,19 +187,12 @@ class RssActions {
     return false;
   }
 
-  Future<void> _importParsedFeed(
-    RssFeed feed, {
-    String? sourceNameHint,
-  }) async {
-
-    final feedTitle = (feed.title ?? '').trim();
-    final sourceName = feedTitle.isNotEmpty
-        ? feedTitle
-        : ((sourceNameHint ?? 'Imported RSS')
-              .replaceAll(RegExp(r'\.[a-zA-Z0-9]+$'), '')
-              .trim());
-    final syntheticUrl =
-        'imported-rss://${DateTime.now().millisecondsSinceEpoch}/${sourceName.toLowerCase().replaceAll(RegExp(r'\s+'), '-')}';
+  Future<void> _importParsedFeed(RssFeed feed, {String? sourceNameHint}) async {
+    final sourceName = inferImportedRssSourceName(
+      feed,
+      sourceNameHint: sourceNameHint,
+    );
+    final syntheticUrl = buildImportedRssSyntheticUrl(sourceName);
 
     final id = await _db.insertFeed(
       FeedsCompanion.insert(name: sourceName, rssUrl: syntheticUrl),
@@ -118,17 +205,15 @@ class RssActions {
         continue;
       }
 
-      final description =
-          item.description?.toString() ?? item.content?.toString() ?? '';
-      final normalizedDescription = extractDescription(description);
+      final preview = parseRssPreviewFromItem(item, source: sourceName);
       await _db.upsertFeedPreview(
-        title: title,
-        url: link,
-        source: sourceName,
-        description: normalizedDescription,
-        image: _extractImage(description, item.enclosure?.url?.toString()),
-        publishedAt: DateTime.tryParse(item.pubDate?.toString() ?? ''),
-        readingTime: estimateReadingTimeFromText(normalizedDescription),
+        title: preview.title,
+        url: preview.url,
+        source: preview.source,
+        description: preview.description,
+        image: preview.image,
+        publishedAt: preview.publishedAt,
+        readingTime: estimateReadingTimeFromText(preview.description),
       );
     }
 
@@ -140,6 +225,31 @@ class RssActions {
 
   Future<void> removeFeed(int id) async {
     await _db.removeFeed(id);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Folder actions
+  // ---------------------------------------------------------------------------
+
+  Future<void> createFolder(String name) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return;
+    await _db.insertFolder(trimmed);
+  }
+
+  Future<void> renameFolder(int id, String newName) async {
+    final trimmed = newName.trim();
+    if (trimmed.isEmpty) return;
+    await _db.renameFolder(id, trimmed);
+  }
+
+  Future<void> deleteFolder(int id) async {
+    // Feeds with this folder_id are set to NULL by the ON DELETE SET NULL FK.
+    await _db.deleteFolder(id);
+  }
+
+  Future<void> moveFeedToFolder(int feedId, int? folderId) async {
+    await _db.moveFeedToFolder(feedId, folderId);
   }
 
   Future<void> refreshFeed(Feed feed) async {
@@ -216,73 +326,6 @@ class RssActions {
     )..where((tbl) => tbl.rssUrl.equals(rssUrl))).getSingleOrNull();
     return existing?.id;
   }
-
-  String? _extractFeedUrlFromDocument(String document) {
-    final atomSelfLink = RegExp(
-      '<atom:link[^>]*rel=["\\\']self["\\\'][^>]*href=["\\\']([^"\\\']+)["\\\']',
-      caseSensitive: false,
-    ).firstMatch(document)?.group(1);
-
-    final normalizedSelfLink = _normalizeHttpUrl(atomSelfLink);
-    if (normalizedSelfLink != null) {
-      return normalizedSelfLink;
-    }
-
-    final genericLinks = RegExp(
-      '<link>(https?://[^<]+)</link>',
-      caseSensitive: false,
-    ).allMatches(document);
-    for (final match in genericLinks) {
-      final candidate = _normalizeHttpUrl(match.group(1));
-      if (candidate != null) {
-        return candidate;
-      }
-    }
-
-    return null;
-  }
-
-  String? _normalizeHttpUrl(String? raw) {
-    if (raw == null) {
-      return null;
-    }
-
-    final candidate = raw.trim();
-    if (candidate.isEmpty) {
-      return null;
-    }
-
-    final uri = Uri.tryParse(candidate);
-    if (uri == null) {
-      return null;
-    }
-
-    if (uri.scheme != 'http' && uri.scheme != 'https') {
-      return null;
-    }
-
-    return candidate;
-  }
-
-  RssFeed? _tryParseFeed(String document) {
-    try {
-      return RssFeed.parse(document);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  String? _extractImage(String html, String? enclosureUrl) {
-    if (enclosureUrl != null && enclosureUrl.trim().isNotEmpty) {
-      return enclosureUrl.trim();
-    }
-
-    final match = RegExp(
-      '<img[^>]+src=["\\\']([^"\\\']+)["\\\']',
-      caseSensitive: false,
-    ).firstMatch(html);
-    return match?.group(1);
-  }
 }
 
 bool _isImportedFeedUrl(String url) {
@@ -294,19 +337,20 @@ Future<List<RssArticlePreview>> _loadImportedFeedArticles(
   String sourceName,
 ) async {
   final db = ref.read(appDatabaseProvider);
-  final rows = await (db.select(db.articles)
-        ..where((tbl) => tbl.source.equals(sourceName))
-        ..orderBy([
-          (tbl) => OrderingTerm(
-            expression: tbl.publishedAt,
-            mode: OrderingMode.desc,
-          ),
-          (tbl) => OrderingTerm(
-            expression: tbl.createdAt,
-            mode: OrderingMode.desc,
-          ),
-        ]))
-      .get();
+  final rows =
+      await (db.select(db.articles)
+            ..where((tbl) => tbl.source.equals(sourceName))
+            ..orderBy([
+              (tbl) => OrderingTerm(
+                expression: tbl.publishedAt,
+                mode: OrderingMode.desc,
+              ),
+              (tbl) => OrderingTerm(
+                expression: tbl.createdAt,
+                mode: OrderingMode.desc,
+              ),
+            ]))
+          .get();
 
   return rows
       .where((row) => row.url.trim().isNotEmpty && row.title.trim().isNotEmpty)

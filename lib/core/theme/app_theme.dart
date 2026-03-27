@@ -11,7 +11,11 @@ class AppTheme {
   static const Color _onSurface = Color(0xFF2C2925);
   static const Color _onSurfaceVariant = Color(0xFF6B665E);
 
-  static ThemeData light() {
+  static final ThemeData lightTheme = _buildLightTheme();
+
+  static ThemeData light() => lightTheme;
+
+  static ThemeData _buildLightTheme() {
     final scheme =
         ColorScheme.fromSeed(
           seedColor: clay,

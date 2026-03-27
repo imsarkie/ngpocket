@@ -2,33 +2,35 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:ngpocket/core/services/service_providers.dart';
-import 'package:ngpocket/features/library/providers/library_provider.dart';
-import 'package:ngpocket/features/reader/presentation/reader_screen.dart';
-import 'package:ngpocket/widgets/loading_skeleton.dart';
+import 'package:reader/core/services/service_providers.dart';
+import 'package:reader/features/library/providers/library_provider.dart';
+import 'package:reader/widgets/article_list_row.dart';
+import 'package:reader/widgets/loading_skeleton.dart';
 
-class LibraryScreen extends ConsumerWidget {
+class LibraryScreen extends ConsumerStatefulWidget {
   const LibraryScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final filter = ref.watch(libraryFilterProvider);
+  ConsumerState<LibraryScreen> createState() => _LibraryScreenState();
+}
+
+class _LibraryScreenState extends ConsumerState<LibraryScreen>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+
     final articlesAsync = ref.watch(savedArticlesProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Library')),
       body: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+        padding: const EdgeInsets.only(top: 8, bottom: 12),
         child: Column(
           children: [
-            _LibraryFilterControl(
-              filter: filter,
-              onChanged: (value) {
-                ref.read(hapticServiceProvider).selection();
-                ref.read(libraryFilterProvider.notifier).state = value;
-              },
-            ),
-            const SizedBox(height: 12),
             Expanded(
               child: articlesAsync.when(
                 data: (articles) {
@@ -43,9 +45,12 @@ class LibraryScreen extends ConsumerWidget {
                   }
 
                   return ListView.separated(
+                    padding: const EdgeInsets.only(bottom: 100),
                     itemCount: articles.length,
-                    separatorBuilder: (context, index) =>
-                        const SizedBox(height: 10),
+                    separatorBuilder: (context, index) => Divider(
+                      height: 1,
+                      color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.3),
+                    ),
                     itemBuilder: (context, index) {
                       final article = articles[index];
                       var deleteWithHighlights = true;
@@ -100,31 +105,19 @@ class LibraryScreen extends ConsumerWidget {
                         secondaryBackground: Container(
                           alignment: Alignment.centerLeft,
                           padding: const EdgeInsets.only(left: 20),
-                          decoration: BoxDecoration(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.secondaryContainer,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
+                          color: Theme.of(context).colorScheme.secondaryContainer,
                           child: Icon(
                             Icons.mark_email_unread_rounded,
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSecondaryContainer,
+                            color: Theme.of(context).colorScheme.onSecondaryContainer,
                           ),
                         ),
                         background: Container(
                           alignment: Alignment.centerRight,
                           padding: const EdgeInsets.only(right: 20),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.errorContainer,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
+                          color: Theme.of(context).colorScheme.errorContainer,
                           child: Icon(
                             Icons.delete_outline_rounded,
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onErrorContainer,
+                            color: Theme.of(context).colorScheme.onErrorContainer,
                           ),
                         ),
                         onDismissed: (_) {
@@ -136,92 +129,14 @@ class LibraryScreen extends ConsumerWidget {
                                 removeHighlights: deleteWithHighlights,
                               );
                         },
-                        child: Material(
-                          color: Theme.of(context).colorScheme.surface,
-                          borderRadius: BorderRadius.circular(20),
-                          child: ListTile(
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 10,
-                            ),
-                            onTap: () {
-                              ref.read(hapticServiceProvider).selection();
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      ReaderScreen(article: article),
-                                ),
-                              );
-                            },
-                            title: Text(
-                              article.title,
-                              style: Theme.of(context).textTheme.titleMedium
-                                  ?.copyWith(fontWeight: FontWeight.w700),
-                            ),
-                            subtitle: Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: Wrap(
-                                spacing: 10,
-                                runSpacing: 8,
-                                children: [
-                                  _MetaPill(label: article.source ?? 'Web'),
-                                  _MetaPill(
-                                    label: '${article.readingTime} min',
-                                  ),
-                                  _MetaPill(
-                                    label: article.read ? 'Read' : 'Unread',
-                                  ),
-                                ],
-                              ),
-                            ),
-                            trailing: IconButton(
-                              onPressed: () async {
-                                final choice = await _showRemoveArticleDialog(
-                                  context,
-                                );
-                                if (!context.mounted ||
-                                    choice == _ArticleRemovalChoice.cancel) {
-                                  return;
-                                }
-
-                                final haptics = ref.read(hapticServiceProvider);
-                                haptics.medium();
-
-                                if (choice ==
-                                    _ArticleRemovalChoice.removeOnly) {
-                                  await ref
-                                      .read(libraryActionsProvider)
-                                      .removeFromLibrary(article.id);
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                          'Removed from library. Highlights retained.',
-                                        ),
-                                      ),
-                                    );
-                                  }
-                                  return;
-                                }
-
-                                await ref
-                                    .read(libraryActionsProvider)
-                                    .deleteArticle(
-                                      article.id,
-                                      removeHighlights: true,
-                                    );
-                                unawaited(haptics.success());
-                              },
-                              icon: const Icon(Icons.bookmark_remove_rounded),
-                            ),
-                          ),
-                        ),
+                        child: ArticleListRow(article: article),
                       );
                     },
                   );
                 },
-                loading: () => ListView.builder(
+                loading: () => ListView.separated(
                   itemCount: 7,
+                  separatorBuilder: (context, index) => const Divider(height: 1),
                   itemBuilder: (context, index) => const ListItemSkeleton(),
                 ),
                 error: (error, stackTrace) => Center(
@@ -234,53 +149,6 @@ class LibraryScreen extends ConsumerWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _LibraryFilterControl extends StatelessWidget {
-  const _LibraryFilterControl({required this.filter, required this.onChanged});
-
-  final LibraryFilter filter;
-  final ValueChanged<LibraryFilter> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 220),
-      switchInCurve: Curves.easeOutCubic,
-      switchOutCurve: Curves.easeInCubic,
-      child: SegmentedButton<LibraryFilter>(
-        key: ValueKey(filter),
-        showSelectedIcon: false,
-        segments: const [
-          ButtonSegment(value: LibraryFilter.all, label: Text('All')),
-          ButtonSegment(value: LibraryFilter.unread, label: Text('Unread')),
-          ButtonSegment(value: LibraryFilter.read, label: Text('Read')),
-        ],
-        selected: {filter},
-        onSelectionChanged: (selection) => onChanged(selection.first),
-      ),
-    );
-  }
-}
-
-class _MetaPill extends StatelessWidget {
-  const _MetaPill({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        child: Text(label, style: Theme.of(context).textTheme.labelSmall),
       ),
     );
   }

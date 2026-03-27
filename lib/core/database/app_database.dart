@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:drift/drift.dart';
@@ -6,6 +7,8 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 part 'app_database.g.dart';
+
+final _rxWhitespace = RegExp(r'\s+');
 
 class Articles extends Table {
   IntColumn get id => integer().autoIncrement()();
@@ -42,6 +45,9 @@ class Feeds extends Table {
 
   TextColumn get rssUrl => text().unique()();
 
+  /// Nullable FK to feed_folders — null means "Uncategorised".
+  IntColumn get folderId => integer().nullable()();
+
   DateTimeColumn get lastUpdated => dateTime().nullable()();
 
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
@@ -77,24 +83,35 @@ class ReaderHighlight {
     required this.highlight,
     required this.articleTitle,
     required this.articleUrl,
+    this.articleAuthor,
+    this.articleSource,
+    this.articleImage,
   });
 
   final Highlight highlight;
   final String articleTitle;
   final String articleUrl;
+  final String? articleAuthor;
+  final String? articleSource;
+  final String? articleImage;
 }
 
 @DriftDatabase(tables: [Articles, Feeds, Highlights, ArticleTags])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
+  /// Broadcast bus notified by every folder mutation so [watchFolders]
+  /// can re-query the raw `feed_folders` table reactively.
+  final _folderBus = StreamController<void>.broadcast();
+
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (Migrator m) async {
       await m.createAll();
+      await customStatement(_ensureFeedFoldersTableSql);
     },
     onUpgrade: (Migrator m, int from, int to) async {
       if (from < 2) {
@@ -108,11 +125,25 @@ class AppDatabase extends _$AppDatabase {
       if (from < 4) {
         await m.createTable(articleTags);
       }
+
+      if (from < 5) {
+        // Create feed_folders table.
+        await customStatement(_ensureFeedFoldersTableSql);
+        // Add folder_id column to feeds (ignore error if already exists).
+        try {
+          await customStatement(
+            'ALTER TABLE feeds ADD COLUMN folder_id INTEGER REFERENCES feed_folders(id) ON DELETE SET NULL;',
+          );
+        } catch (_) {
+          // Column may already exist on fresh installs.
+        }
+      }
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON;');
       await customStatement(_ensureHighlightsTableSql);
       await customStatement(_ensureArticleTagsTableSql);
+      await customStatement(_ensureFeedFoldersTableSql);
     },
   );
 
@@ -135,6 +166,33 @@ class AppDatabase extends _$AppDatabase {
         ]))
         .watch();
   }
+
+  /// Filters inbox articles to a single [source] (feed name).
+  Stream<List<Article>> watchInboxArticlesBySource(String source) {
+    return (select(articles)
+          ..where((tbl) => tbl.source.equals(source))
+          ..orderBy([
+            (tbl) => OrderingTerm(
+                  expression: tbl.createdAt, mode: OrderingMode.desc),
+          ]))
+        .watch();
+  }
+
+  /// Filters inbox articles to all feeds belonging to [folderId].
+  /// Uses a Drift typed join so the result is reactive.
+  Stream<List<Article>> watchInboxArticlesByFolder(int folderId) {
+    final query = select(articles).join([
+      innerJoin(feeds, feeds.name.equalsExp(articles.source)),
+    ])
+      ..where(feeds.folderId.equals(folderId))
+      ..orderBy([
+        OrderingTerm(expression: articles.createdAt, mode: OrderingMode.desc),
+      ]);
+    return query
+        .watch()
+        .map((rows) => rows.map((r) => r.readTable(articles)).toList());
+  }
+
 
   Stream<List<Article>> watchSavedArticles() {
     return (select(articles)
@@ -163,6 +221,80 @@ class AppDatabase extends _$AppDatabase {
               OrderingTerm(expression: tbl.createdAt, mode: OrderingMode.asc),
         ]))
         .watch();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Feed Folders
+  // ---------------------------------------------------------------------------
+
+  /// Fetches all folders once (non-reactive).
+  Future<List<FolderRow>> fetchFolders() async {
+    final rows = await customSelect(
+      'SELECT * FROM feed_folders ORDER BY sort_order ASC, created_at ASC',
+    ).get();
+    return rows
+        .map(
+          (row) => FolderRow(
+            id: row.read<int>('id'),
+            name: row.read<String>('name'),
+            sortOrder: row.read<int>('sort_order'),
+            createdAt: DateTime.fromMillisecondsSinceEpoch(
+              row.read<int>('created_at'),
+            ),
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  /// Reactive stream: emits immediately, then re-emits whenever any folder
+  /// mutation calls [_folderBus.add].
+  Stream<List<FolderRow>> watchFolders() async* {
+    yield await fetchFolders();
+    await for (final _ in _folderBus.stream) {
+      yield await fetchFolders();
+    }
+  }
+
+  Future<int> insertFolder(String name) async {
+    final maxOrder = await customSelect(
+      'SELECT COALESCE(MAX(sort_order), 0) AS m FROM feed_folders',
+    ).getSingle().then((r) => r.read<int>('m') + 1);
+
+    await customStatement(
+      'INSERT INTO feed_folders (name, sort_order) VALUES (?, ?)',
+      [name, maxOrder],
+    );
+
+    final result = await customSelect(
+      'SELECT last_insert_rowid() AS id',
+    ).getSingle();
+    final id = result.read<int>('id');
+    _folderBus.add(null); // notify watchFolders
+    return id;
+  }
+
+  Future<void> renameFolder(int id, String newName) async {
+    await customStatement(
+      'UPDATE feed_folders SET name = ? WHERE id = ?',
+      [newName, id],
+    );
+    _folderBus.add(null);
+  }
+
+  Future<void> deleteFolder(int id) async {
+    await customStatement(
+      'DELETE FROM feed_folders WHERE id = ?',
+      [id],
+    );
+    _folderBus.add(null);
+  }
+
+  /// Moves a feed to a folder (or null = uncategorised).
+  /// Uses Drift's typed update so [watchFeeds()] picks up the change.
+  Future<void> moveFeedToFolder(int feedId, int? folderId) {
+    return (update(feeds)..where((tbl) => tbl.id.equals(feedId))).write(
+      FeedsCompanion(folderId: Value(folderId)),
+    );
   }
 
   Stream<List<Highlight>> watchHighlightsForArticle(int articleId) {
@@ -195,6 +327,9 @@ class AppDatabase extends _$AppDatabase {
               highlight: row.readTable(highlights),
               articleTitle: row.readTable(articles).title,
               articleUrl: row.readTable(articles).url,
+              articleAuthor: row.readTable(articles).author,
+              articleSource: row.readTable(articles).source,
+              articleImage: row.readTable(articles).image,
             ),
           )
           .toList(growable: false),
@@ -211,6 +346,15 @@ class AppDatabase extends _$AppDatabase {
     return result.read(countExpression) ?? 0;
   }
 
+  Stream<int> watchHighlightCountForArticle(int articleId) {
+    final countExpression = highlights.id.count();
+    final query = selectOnly(highlights)
+      ..addColumns([countExpression])
+      ..where(highlights.articleId.equals(articleId));
+
+    return query.watchSingle().map((row) => row.read(countExpression) ?? 0);
+  }
+
   Future<void> addHighlight({required int articleId, required String text}) {
     return into(
       highlights,
@@ -221,6 +365,19 @@ class AppDatabase extends _$AppDatabase {
     return (delete(
       highlights,
     )..where((tbl) => tbl.id.equals(highlightId))).go();
+  }
+
+  Stream<List<Article>> watchArticlesByTag(String tag) {
+    final query = select(articles).join([
+      innerJoin(articleTags, articleTags.articleId.equalsExp(articles.id)),
+    ])
+      ..where(articleTags.tag.equals(tag))
+      ..orderBy([
+        OrderingTerm(expression: articles.createdAt, mode: OrderingMode.desc),
+      ]);
+    return query
+        .watch()
+        .map((rows) => rows.map((r) => r.readTable(articles)).toList());
   }
 
   Stream<List<String>> watchTagsForArticle(int articleId) {
@@ -254,7 +411,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<void> addTagToArticle({required int articleId, required String tag}) {
-    final normalized = tag.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final normalized = tag.replaceAll(_rxWhitespace, ' ').trim();
     if (normalized.isEmpty) {
       return Future.value();
     }
@@ -343,7 +500,7 @@ class AppDatabase extends _$AppDatabase {
         .getSingleOrNull();
   }
 
-  Future<void> upsertFeedPreview({
+  Future<bool> upsertFeedPreview({
     required String title,
     required String url,
     required String source,
@@ -365,7 +522,7 @@ class AppDatabase extends _$AppDatabase {
           publishedAt: Value(publishedAt),
         ),
       );
-      return;
+      return true;
     }
 
     await (update(articles)..where((tbl) => tbl.id.equals(existing.id))).write(
@@ -378,6 +535,7 @@ class AppDatabase extends _$AppDatabase {
         publishedAt: Value(publishedAt),
       ),
     );
+    return false;
   }
 
   Future<void> saveParsedArticle({
@@ -450,6 +608,33 @@ class AppDatabase extends _$AppDatabase {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Plain data class for folder rows (avoids Drift codegen for the new table).
+// ---------------------------------------------------------------------------
+
+class FolderRow {
+  const FolderRow({
+    required this.id,
+    required this.name,
+    required this.sortOrder,
+    required this.createdAt,
+  });
+
+  final int id;
+  final String name;
+  final int sortOrder;
+  final DateTime createdAt;
+}
+
+const _ensureFeedFoldersTableSql = '''
+CREATE TABLE IF NOT EXISTS feed_folders (
+  id         INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+  name       TEXT    NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL DEFAULT (strftime('%s','now') * 1000)
+);
+''';
+
 const _ensureHighlightsTableSql = '''
 CREATE TABLE IF NOT EXISTS highlights (
   id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
@@ -474,7 +659,7 @@ CREATE TABLE IF NOT EXISTS article_tags (
 LazyDatabase _openConnection() {
   return LazyDatabase(() async {
     final dbDir = await getApplicationDocumentsDirectory();
-    final file = File(p.join(dbDir.path, 'ngpocket.sqlite'));
+    final file = File(p.join(dbDir.path, 'reader.sqlite'));
     return NativeDatabase.createInBackground(file);
   });
 }

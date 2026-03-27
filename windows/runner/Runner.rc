@@ -94,7 +94,7 @@ BEGIN
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "Reader" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "ngpocket.exe" "\0"
+            VALUE "OriginalFilename", "reader.exe" "\0"
             VALUE "ProductName", "Reader" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END

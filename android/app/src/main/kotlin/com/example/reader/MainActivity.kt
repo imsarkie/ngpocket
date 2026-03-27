@@ -1,4 +1,4 @@
-package com.example.ngpocket
+package com.example.reader
 
 import io.flutter.embedding.android.FlutterActivity
 

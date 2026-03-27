@@ -1,9 +1,12 @@
 import 'package:dio/dio.dart';
 import 'package:html/dom.dart';
 import 'package:html/parser.dart' as html_parser;
-import 'package:ngpocket/core/models/parsed_article.dart';
-import 'package:ngpocket/core/utils/html_cleaner.dart';
-import 'package:ngpocket/core/utils/reading_time.dart';
+import 'package:reader/core/models/parsed_article.dart';
+import 'package:reader/core/utils/html_cleaner.dart';
+import 'package:reader/core/utils/reading_time.dart';
+
+final _rxTrailingSlash = RegExp(r'/$');
+final _rxByPrefix = RegExp(r'^by\s+', caseSensitive: false);
 
 class ArticleParserService {
   const ArticleParserService(this._dio);
@@ -35,7 +38,7 @@ class ArticleParserService {
     try {
       final normalized = endpoint.endsWith('/parse')
           ? endpoint
-          : '${endpoint.replaceAll(RegExp(r'/$'), '')}/parse';
+          : '${endpoint.replaceAll(_rxTrailingSlash, '')}/parse';
       final response = await _dio.post<dynamic>(normalized, data: {'url': url});
       final payload = response.data;
       if (payload is Map<String, dynamic>) {
@@ -133,6 +136,6 @@ class ArticleParserService {
       return null;
     }
 
-    return byline.replaceFirst(RegExp(r'^by\s+', caseSensitive: false), '');
+    return byline.replaceFirst(_rxByPrefix, '');
   }
 }

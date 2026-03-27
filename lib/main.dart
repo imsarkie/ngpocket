@@ -2,30 +2,30 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:ngpocket/core/services/background_sync_service.dart';
-import 'package:ngpocket/core/services/service_providers.dart';
-import 'package:ngpocket/core/services/share_intent_service.dart';
-import 'package:ngpocket/core/theme/app_theme.dart';
-import 'package:ngpocket/features/feed/providers/feed_provider.dart';
-import 'package:ngpocket/features/rss/presentation/rss_sources_screen.dart';
-import 'package:ngpocket/features/rss/providers/rss_provider.dart';
-import 'package:ngpocket/features/settings/providers/settings_provider.dart';
-import 'package:ngpocket/features/splash/presentation/reader_splash_gate.dart';
-import 'package:ngpocket/widgets/app_shell.dart';
+import 'package:reader/core/services/background_sync_service.dart';
+import 'package:reader/core/services/service_providers.dart';
+import 'package:reader/core/services/share_intent_service.dart';
+import 'package:reader/core/theme/app_theme.dart';
+import 'package:reader/features/feed/providers/feed_provider.dart';
+import 'package:reader/features/rss/presentation/rss_sources_screen.dart';
+import 'package:reader/features/rss/providers/rss_provider.dart';
+import 'package:reader/features/settings/providers/settings_provider.dart';
+import 'package:reader/features/splash/presentation/reader_splash_gate.dart';
+import 'package:reader/widgets/app_shell.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const ProviderScope(child: NgPocketApp()));
+  runApp(const ProviderScope(child: ReaderApp()));
 }
 
-class NgPocketApp extends ConsumerStatefulWidget {
-  const NgPocketApp({super.key});
+class ReaderApp extends ConsumerStatefulWidget {
+  const ReaderApp({super.key});
 
   @override
-  ConsumerState<NgPocketApp> createState() => _NgPocketAppState();
+  ConsumerState<ReaderApp> createState() => _ReaderAppState();
 }
 
-class _NgPocketAppState extends ConsumerState<NgPocketApp> {
+class _ReaderAppState extends ConsumerState<ReaderApp> {
   StreamSubscription<SharedImport>? _shareSubscription;
   DateTime? _lastFeedsOpenAt;
 
@@ -125,6 +125,12 @@ class _NgPocketAppState extends ConsumerState<NgPocketApp> {
   Future<void> _initializeBackgroundSync() async {
     try {
       await ref.read(appSettingsProvider.notifier).ensureHydrated();
+      
+      // On app open: automatically fetch in background silently so you 
+      // aren't peppered with notifications directly on launch.
+      unawaited(
+        BackgroundSyncService.syncFeedsAndNotify(notifyUser: false),
+      );
     } catch (_) {
       // Keep app startup resilient if background scheduling fails.
     }

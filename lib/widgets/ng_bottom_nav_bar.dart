@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:ngpocket/widgets/unread_badge.dart';
+import 'package:reader/widgets/unread_badge.dart';
 
 double navBarHeightFor(BuildContext context) {
   final media = MediaQuery.of(context);
@@ -69,14 +69,18 @@ class _NgBottomNavBarState extends State<NgBottomNavBar> {
   }
 
   int _releaseIndexWithVelocity({
-    required int nearestIndex,
+    required double dragDx,
+    required double railWidth,
     required double velocityX,
     required int itemCount,
   }) {
+    final nearestIndex = _indexFromDx(dragDx, railWidth, itemCount);
+    
     if (velocityX.abs() < _flingVelocityThreshold) {
       return nearestIndex;
     }
 
+    // A deliberate swipe should just move to the next immediate item.
     final flingDirection = velocityX.isNegative ? -1 : 1;
     return (nearestIndex + flingDirection).clamp(0, itemCount - 1);
   }
@@ -214,14 +218,10 @@ class _NgBottomNavBarState extends State<NgBottomNavBar> {
                         return;
                       }
 
-                      final nearestIndex = _indexFromDx(
-                        dragDx - indicatorInset,
-                        railWidth,
-                        itemCount,
-                      );
                       final velocityX = details.primaryVelocity ?? 0;
                       final targetIndex = _releaseIndexWithVelocity(
-                        nearestIndex: nearestIndex,
+                        dragDx: dragDx - indicatorInset,
+                        railWidth: railWidth,
                         velocityX: velocityX,
                         itemCount: itemCount,
                       );
@@ -249,34 +249,15 @@ class _NgBottomNavBarState extends State<NgBottomNavBar> {
                     },
                     child: Stack(
                       children: [
-                        if (_isDraggingSelector)
-                          Positioned(
+                          AnimatedPositioned(
+                            duration: _isDraggingSelector
+                                ? Duration.zero
+                                : const Duration(milliseconds: 300),
+                            curve: Curves.easeOutQuint,
                             left: stretchedLeft,
                             top: indicatorInset,
                             bottom: indicatorInset,
                             width: stretchedIndicatorWidth,
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                                color: colorScheme.primary.withValues(
-                                  alpha: 0.2,
-                                ),
-                                border: Border.all(
-                                  color: colorScheme.primary.withValues(
-                                    alpha: 0.3,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        if (!_isDraggingSelector)
-                          AnimatedPositioned(
-                            duration: const Duration(milliseconds: 220),
-                            curve: Curves.easeOutCubic,
-                            left: selectorLeft,
-                            top: indicatorInset,
-                            bottom: indicatorInset,
-                            width: indicatorWidth,
                             child: DecoratedBox(
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(12),
@@ -365,11 +346,11 @@ class _LiquidNavButton extends StatelessWidget {
             height: 48,
             child: Center(
               child: AnimatedScale(
-                duration: const Duration(milliseconds: 220),
-                curve: Curves.easeOutCubic,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOutQuint,
                 scale: selected ? (highlighted ? 1.07 : 1.04) : 0.96,
                 child: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 200),
+                  duration: const Duration(milliseconds: 250),
                   opacity: selected ? 1 : 0.82,
                   child: baseIcon,
                 ),

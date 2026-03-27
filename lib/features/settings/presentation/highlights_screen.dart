@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:ngpocket/features/reader/providers/reader_provider.dart';
+import 'package:reader/features/reader/providers/reader_provider.dart';
+import 'package:reader/features/settings/presentation/share_highlight_dialog.dart';
 
 class HighlightsScreen extends ConsumerWidget {
   const HighlightsScreen({super.key});
@@ -67,12 +68,25 @@ class HighlightsScreen extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  trailing: IconButton(
-                    tooltip: 'Delete highlight',
-                    onPressed: () => ref
-                        .read(readerActionsProvider)
-                        .deleteHighlight(item.highlight.id),
-                    icon: const Icon(Icons.delete_outline_rounded),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: 'Share quote image',
+                        onPressed: () => showDialog<void>(
+                          context: context,
+                          builder: (_) => ShareHighlightDialog(item: item),
+                        ),
+                        icon: const Icon(Icons.ios_share_rounded),
+                      ),
+                      IconButton(
+                        tooltip: 'Delete highlight',
+                        onPressed: () => ref
+                            .read(readerActionsProvider)
+                            .deleteHighlight(item.highlight.id),
+                        icon: const Icon(Icons.delete_outline_rounded),
+                      ),
+                    ],
                   ),
                 ),
               );

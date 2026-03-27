@@ -1,14 +1,11 @@
 import 'dart:io';
 
+import 'package:reader/core/parsing/rss_content_parser.dart';
 import 'package:path/path.dart' as p;
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 
 class SharedImport {
-  const SharedImport({
-    this.articleUrl,
-    this.rssDocument,
-    this.fileName,
-  });
+  const SharedImport({this.articleUrl, this.rssDocument, this.fileName});
 
   final String? articleUrl;
   final String? rssDocument;
@@ -72,14 +69,11 @@ class ShareIntentService {
     }
 
     final content = await file.readAsString();
-    if (!_looksLikeRssDocument(content)) {
+    if (!looksLikeRssDocument(content)) {
       return null;
     }
 
-    return SharedImport(
-      rssDocument: content,
-      fileName: p.basename(filePath),
-    );
+    return SharedImport(rssDocument: content, fileName: p.basename(filePath));
   }
 
   String? _normalizeUrl(String? raw) {
@@ -126,12 +120,5 @@ class ShareIntentService {
     return lower.endsWith('.rss') ||
         lower.endsWith('.xml') ||
         lower.endsWith('.atom');
-  }
-
-  bool _looksLikeRssDocument(String content) {
-    final lower = content.toLowerCase();
-    return lower.contains('<rss') ||
-        lower.contains('<feed') ||
-        lower.contains('<rdf:rdf');
   }
 }

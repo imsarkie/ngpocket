@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:ngpocket/core/database/app_database.dart';
-import 'package:ngpocket/core/database/database_provider.dart';
+import 'package:reader/core/database/app_database.dart';
+import 'package:reader/core/database/database_provider.dart';
 
 enum LibraryFilter { all, unread, read }
 
@@ -25,6 +25,14 @@ final savedArticlesProvider = StreamProvider<List<Article>>((ref) {
         return articles;
     }
   });
+});
+
+final articlesByTagProvider = StreamProvider.family<List<Article>, String>((ref, tag) {
+  return ref.watch(appDatabaseProvider).watchArticlesByTag(tag);
+});
+
+final articleHighlightCountProvider = StreamProvider.family<int, int>((ref, articleId) {
+  return ref.watch(appDatabaseProvider).watchHighlightCountForArticle(articleId);
 });
 
 final libraryActionsProvider = Provider<LibraryActions>(

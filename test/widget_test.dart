@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:ngpocket/main.dart';
+import 'package:reader/main.dart';
 
 void main() {
   testWidgets('app shell renders bottom nav icons', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(const ProviderScope(child: NgPocketApp()));
+    await tester.pumpWidget(const ProviderScope(child: ReaderApp()));
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.byIcon(Icons.bookmark_rounded), findsOneWidget);

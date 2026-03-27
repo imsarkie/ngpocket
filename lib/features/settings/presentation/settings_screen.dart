@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:ngpocket/core/services/service_providers.dart';
-import 'package:ngpocket/features/reader/providers/reader_provider.dart';
-import 'package:ngpocket/features/settings/presentation/highlights_screen.dart';
-import 'package:ngpocket/features/settings/providers/settings_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:reader/core/services/service_providers.dart';
+import 'package:reader/features/reader/providers/reader_provider.dart';
+import 'package:reader/features/settings/presentation/highlights_screen.dart';
+import 'package:reader/features/settings/presentation/premium_screen.dart';
+import 'package:reader/features/settings/providers/settings_provider.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -13,20 +15,11 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  late final TextEditingController _endpointController;
-
-  @override
-  void initState() {
-    super.initState();
-    _endpointController = TextEditingController(
-      text: ref.read(appSettingsProvider).parserEndpoint,
-    );
-  }
-
-  @override
-  void dispose() {
-    _endpointController.dispose();
-    super.dispose();
+  Future<void> _launchUrl(String url) async {
+    final uri = Uri.parse(url);
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      debugPrint('Could not launch $url');
+    }
   }
 
   @override
@@ -40,98 +33,84 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 110),
         children: [
-          const _SectionHeading(title: 'Appearance'),
+          // 1. Profile Section (Disabled)
+          const _SectionHeading(title: 'Profile'),
+          const SizedBox(height: 12),
           _SectionCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Color Palette',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: Theme.of(context).disabledColor.withValues(alpha: 0.1),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'Vintage mode is now fixed across the app with Clay, Beige, Sage, and Mist Blue accents.',
-                  style: Theme.of(context).textTheme.bodyMedium,
+                child: Icon(
+                  Icons.person_outline_rounded,
+                  color: Theme.of(context).disabledColor,
                 ),
-              ],
+              ),
+              title: Text(
+                'Guest User',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: Theme.of(context).disabledColor,
+                ),
+              ),
+              subtitle: Text(
+                'Not logged in',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).disabledColor,
+                ),
+              ),
+              enabled: false,
             ),
           ),
           const SizedBox(height: 18),
-          const _SectionHeading(title: 'Reader'),
+
+          // 2. Highlights Section
+          const _SectionHeading(title: 'Highlights'),
           const SizedBox(height: 12),
           _SectionCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      color: Theme.of(context).colorScheme.primaryContainer,
-                    ),
-                    child: Icon(
-                      Icons.auto_awesome_rounded,
-                      color: Theme.of(context).colorScheme.onPrimaryContainer,
-                    ),
-                  ),
-                  title: Text(
-                    'Highlights',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  subtitle: Text(
-                    '$highlightCount saved snippets',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () {
-                    ref.read(hapticServiceProvider).selection();
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const HighlightsScreen(),
-                      ),
-                    );
-                  },
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: Theme.of(context).colorScheme.primaryContainer,
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          _SectionCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Reader Font Scale',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
+                child: Icon(
+                  Icons.auto_awesome_rounded,
+                  color: Theme.of(context).colorScheme.onPrimaryContainer,
+                ),
+              ),
+              title: Text(
+                'Saved Snippets',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              subtitle: Text(
+                '$highlightCount highlights',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () {
+                ref.read(hapticServiceProvider).selection();
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const HighlightsScreen(),
                   ),
-                ),
-                const SizedBox(height: 8),
-                Slider(
-                  value: settings.readerFontScale,
-                  min: 0.85,
-                  max: 1.5,
-                  divisions: 13,
-                  label: '${settings.readerFontScale.toStringAsFixed(2)}x',
-                  onChanged: (value) {
-                    ref.read(hapticServiceProvider).selection();
-                    ref
-                        .read(appSettingsProvider.notifier)
-                        .setReaderFontScale(value);
-                  },
-                ),
-              ],
+                );
+              },
             ),
           ),
           const SizedBox(height: 18),
+
+          // 3. Notifications Section
           const _SectionHeading(title: 'Notifications'),
           const SizedBox(height: 12),
           _SectionCard(
@@ -141,13 +120,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 SwitchListTile.adaptive(
                   contentPadding: EdgeInsets.zero,
                   title: Text(
-                    'Morning RSS sync alerts',
+                    'Scheduled RSS sync & alerts',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                   subtitle: Text(
-                    'After sync, notify when unread library count reaches your threshold.',
+                    'Daily 1PM Feed drops and recurring unread library reminders.',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                   value: settings.morningSyncNotificationsEnabled,
@@ -175,24 +154,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Unread threshold: ${settings.unreadNotificationThreshold}',
+                  'Library Reminders: ${settings.libraryRemindersPerDay} times a day',
                   style: Theme.of(
                     context,
                   ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 6),
                 Slider(
-                  value: settings.unreadNotificationThreshold.toDouble(),
-                  min: 3,
+                  value: settings.libraryRemindersPerDay.toDouble(),
+                  min: 1,
                   max: 10,
-                  divisions: 7,
-                  label: '${settings.unreadNotificationThreshold}',
+                  divisions: 9,
+                  label: '${settings.libraryRemindersPerDay}',
                   onChanged: settings.morningSyncNotificationsEnabled
                       ? (value) {
                           ref.read(hapticServiceProvider).selection();
                           ref
                               .read(appSettingsProvider.notifier)
-                              .setUnreadNotificationThreshold(
+                              .setLibraryRemindersPerDay(
                                 value.round(),
                                 persist: false,
                               );
@@ -204,10 +183,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           haptics.medium();
                           await ref
                               .read(appSettingsProvider.notifier)
-                              .setUnreadNotificationThreshold(
+                              .setLibraryRemindersPerDay(
                                 value.round(),
                                 persist: true,
-                                showTestNotification: true,
                               );
 
                           if (!context.mounted) {
@@ -217,7 +195,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(
-                                'Threshold saved to ${value.round()}. Test notification sent.',
+                                'Frequency saved to ${value.round()} times a day.',
                               ),
                             ),
                           );
@@ -225,63 +203,54 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       : null,
                 ),
                 Text(
-                  'Range: 3 to 10 unread saved articles.',
+                  'Range: 1 to 10 daily reminders.',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],
             ),
           ),
           const SizedBox(height: 18),
-          const _SectionHeading(title: 'Parser'),
+
+          // 4. Premium Banner Section
+          const _SectionHeading(title: 'Unlock Features'),
           const SizedBox(height: 12),
           _SectionCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Parser Backend',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: Theme.of(context).colorScheme.tertiaryContainer,
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'Optional endpoint used for POST /parse. When empty, local parsing is used.',
-                  style: Theme.of(context).textTheme.bodySmall,
+                child: Icon(
+                  Icons.workspace_premium_rounded,
+                  color: Theme.of(context).colorScheme.onTertiaryContainer,
                 ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _endpointController,
-                  keyboardType: TextInputType.url,
-                  decoration: const InputDecoration(
-                    hintText: 'https://your-parser-api.com',
-                    border: OutlineInputBorder(),
-                  ),
+              ),
+              title: Text(
+                'Reader Premium',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
                 ),
-                const SizedBox(height: 10),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: FilledButton.tonal(
-                    onPressed: () {
-                      final haptics = ref.read(hapticServiceProvider);
-                      haptics.medium();
-                      ref
-                          .read(appSettingsProvider.notifier)
-                          .setParserEndpoint(_endpointController.text);
-                      haptics.selection();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Parser endpoint updated.'),
-                        ),
-                      );
-                    },
-                    child: const Text('Save Endpoint'),
-                  ),
-                ),
-              ],
+              ),
+              subtitle: Text(
+                'Unlock Cloud Sync, Text-to-Speech & more',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () {
+                ref.read(hapticServiceProvider).selection();
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const PremiumScreen()),
+                );
+              },
             ),
           ),
           const SizedBox(height: 18),
+
+          // 5. About Section
           const _SectionHeading(title: 'About'),
           const SizedBox(height: 12),
           _SectionCard(
@@ -289,7 +258,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'ngpocket',
+                  'Reader',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
@@ -298,6 +267,52 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 Text(
                   'Minimal, swipe-first reading inbox for RSS and shared web articles.',
                   style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 24),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  alignment: WrapAlignment.start,
+                  children: [
+                    FilledButton.tonalIcon(
+                      onPressed: () => _launchUrl('https://reader.imsarkie.in'),
+                      icon: const Icon(Icons.language_rounded, size: 18),
+                      label: const Text('Website'),
+                    ),
+                    FilledButton.tonalIcon(
+                      onPressed: () => _launchUrl('https://reader.imsarkie.in/docs/contact-us.html'),
+                      icon: const Icon(Icons.mail_rounded, size: 18),
+                      label: const Text('Contact Us'),
+                    ),
+                    FilledButton.tonalIcon(
+                      onPressed: () => _launchUrl('https://reader.imsarkie.in/docs/about-us.html'),
+                      icon: const Icon(Icons.info_rounded, size: 18),
+                      label: const Text('About Us'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          
+          const SizedBox(height: 32),
+          
+          // 6. Footer
+          Center(
+            child: Column(
+              children: [
+                Text(
+                  '© ${DateTime.now().year} Reader',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Developed by imsarkie',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),

@@ -7,13 +7,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:ngpocket/core/database/app_database.dart';
-import 'package:ngpocket/core/database/database_provider.dart';
-import 'package:ngpocket/core/models/app_settings.dart';
-import 'package:ngpocket/core/services/service_providers.dart';
-import 'package:ngpocket/features/feed/providers/feed_provider.dart';
-import 'package:ngpocket/features/reader/providers/reader_provider.dart';
-import 'package:ngpocket/features/settings/providers/settings_provider.dart';
+import 'package:reader/core/database/app_database.dart';
+import 'package:reader/core/database/database_provider.dart';
+import 'package:reader/core/models/app_settings.dart';
+import 'package:reader/core/services/service_providers.dart';
+import 'package:reader/features/feed/providers/feed_provider.dart';
+import 'package:reader/features/reader/providers/reader_provider.dart';
+import 'package:reader/features/settings/providers/settings_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class ReaderScreen extends ConsumerStatefulWidget {
