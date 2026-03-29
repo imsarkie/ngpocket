@@ -64,6 +64,10 @@ final sharedUrlStreamProvider = StreamProvider<String>((ref) {
   return ref.watch(shareIntentServiceProvider).sharedUrlStream();
 });
 
+/// URLs currently being fetched/parsed in the background.
+/// Watched by [ArticleListRow] to show a "Downloading…" indicator.
+final downloadingUrlsProvider = StateProvider<Set<String>>((ref) => const {});
+
 final feedActionsProvider = Provider<FeedActions>((ref) => FeedActions(ref));
 
 class FeedActions {

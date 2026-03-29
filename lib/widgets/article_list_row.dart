@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:reader/core/database/app_database.dart';
 import 'package:reader/core/services/service_providers.dart';
 import 'package:reader/core/theme/app_theme.dart';
+import 'package:reader/features/feed/providers/feed_provider.dart';
 import 'package:reader/features/library/presentation/tag_articles_screen.dart';
 import 'package:reader/features/reader/presentation/reader_screen.dart';
 import 'package:reader/features/reader/providers/reader_provider.dart';
@@ -43,12 +44,14 @@ class ArticleListRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tagsAsync = ref.watch(articleTagsProvider(article.id));
     final tags = tagsAsync.valueOrNull ?? [];
+    final isDownloading =
+        ref.watch(downloadingUrlsProvider).contains(article.url);
 
     String snippet = article.description ?? '';
     if (snippet.isEmpty) {
       snippet = _stripHtml(article.content);
     }
-    
+
     final hasImage = article.image != null && article.image!.isNotEmpty;
     final dotColor = getDotColorForSource(article.source ?? '');
 
@@ -103,15 +106,19 @@ class ArticleListRow extends ConsumerWidget {
                            fontWeight: FontWeight.w600,
                          ),
                        ),
-                       Text(
-                         ' • ${article.readingTime} min',
-                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                           color: Theme.of(context).colorScheme.onSurfaceVariant,
+                       if (!isDownloading)
+                         Text(
+                           ' • ${article.readingTime} min',
+                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                             color: Theme.of(context).colorScheme.onSurfaceVariant,
+                           ),
                          ),
-                       ),
                      ],
                    ),
-                   if (snippet.isNotEmpty) ...[
+                   if (isDownloading) ...[
+                     const SizedBox(height: 6),
+                     const _DownloadingIndicator(),
+                   ] else if (snippet.isNotEmpty) ...[
                      const SizedBox(height: 6),
                      Text(
                        snippet,
@@ -191,6 +198,52 @@ class _TagBubble extends ConsumerWidget {
              color: Theme.of(context).colorScheme.onSurfaceVariant,
            ),
          ),
+      ),
+    );
+  }
+}
+
+/// Animated "Downloading…" label shown while an article is being fetched.
+class _DownloadingIndicator extends StatefulWidget {
+  const _DownloadingIndicator();
+
+  @override
+  State<_DownloadingIndicator> createState() => _DownloadingIndicatorState();
+}
+
+class _DownloadingIndicatorState extends State<_DownloadingIndicator>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _fade;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+    _fade = Tween<double>(begin: 0.4, end: 1.0).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _fade,
+      child: Text(
+        'Downloading…',
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+          fontStyle: FontStyle.italic,
+        ),
       ),
     );
   }

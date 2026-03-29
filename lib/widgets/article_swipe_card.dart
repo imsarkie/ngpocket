@@ -26,6 +26,12 @@ class ArticleSwipeCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final parsedCard = parseSwipeCardData(article);
     final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    // Light: near-white warm cream. Dark: warm walnut charcoal.
+    final cardColor = isDark ? const Color(0xFF2B2419) : const Color(0xFFFBF4EA);
+    final cardGradientBottom = isDark ? const Color(0xFF362D1F) : const Color(0xFFF5EAD8);
+    // Border: clay-tinted warm brown in both modes.
+    final cardBorderColor = isDark ? const Color(0xFF5A4A35) : const Color(0xFFC8A882);
     final horizontal = (horizontalSwipePercent / 100)
         .clamp(-1.0, 1.0)
         .toDouble();
@@ -52,9 +58,11 @@ class ArticleSwipeCard extends StatelessWidget {
                 child: Card(
                   margin: EdgeInsets.zero,
                   elevation: 5,
+                  color: cardColor,
                   shadowColor: Colors.black.withValues(alpha: 0.1),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(18),
+                    side: BorderSide(color: cardBorderColor, width: 1.2),
                   ),
                   clipBehavior: Clip.antiAlias,
                   child: Stack(
@@ -72,14 +80,14 @@ class ArticleSwipeCard extends StatelessWidget {
                           Expanded(
                             flex: 7,
                             child: DecoratedBox(
-                              decoration: const BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [
-                                    Color(0xFFFFFCF6),
-                                    Color(0xFFF7EFE2),
-                                  ],
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [
+                                      cardColor,
+                                      cardGradientBottom,
+                                    ],
                                 ),
                               ),
                               child: Padding(

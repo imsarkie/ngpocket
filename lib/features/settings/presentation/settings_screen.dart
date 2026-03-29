@@ -3,8 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:reader/core/services/service_providers.dart';
 import 'package:reader/features/reader/providers/reader_provider.dart';
+import 'package:reader/features/settings/presentation/about_app_screen.dart';
 import 'package:reader/features/settings/presentation/highlights_screen.dart';
 import 'package:reader/features/settings/presentation/premium_screen.dart';
+import 'package:reader/features/settings/presentation/privacy_policy_screen.dart';
+import 'package:reader/features/settings/presentation/terms_conditions_screen.dart';
 import 'package:reader/features/settings/providers/settings_provider.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -69,7 +72,50 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           const SizedBox(height: 18),
 
-          // 2. Highlights Section
+          // 2. Appearance Section
+          const _SectionHeading(title: 'Appearance'),
+          const SizedBox(height: 12),
+          _SectionCard(
+            child: SwitchListTile.adaptive(
+              contentPadding: EdgeInsets.zero,
+              secondary: Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: Theme.of(context).colorScheme.secondaryContainer,
+                ),
+                child: Icon(
+                  settings.isDarkMode
+                      ? Icons.dark_mode_rounded
+                      : Icons.light_mode_rounded,
+                  color: Theme.of(context).colorScheme.onSecondaryContainer,
+                ),
+              ),
+              title: Text(
+                'Dark Mode',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              subtitle: Text(
+                settings.isDarkMode
+                    ? 'Using dark theme'
+                    : 'Using light theme',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              value: settings.isDarkMode,
+              onChanged: (enabled) {
+                ref.read(hapticServiceProvider).selection();
+                ref
+                    .read(appSettingsProvider.notifier)
+                    .setDarkMode(enabled);
+              },
+            ),
+          ),
+          const SizedBox(height: 18),
+
+          // 3. Highlights Section
           const _SectionHeading(title: 'Highlights'),
           const SizedBox(height: 12),
           _SectionCard(
@@ -110,7 +156,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           const SizedBox(height: 18),
 
-          // 3. Notifications Section
+          // 4. Notifications Section
           const _SectionHeading(title: 'Notifications'),
           const SizedBox(height: 12),
           _SectionCard(
@@ -211,7 +257,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           const SizedBox(height: 18),
 
-          // 4. Premium Banner Section
+          // 5. Premium Banner Section
           const _SectionHeading(title: 'Unlock Features'),
           const SizedBox(height: 12),
           _SectionCard(
@@ -250,13 +296,121 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           const SizedBox(height: 18),
 
-          // 5. About Section
+          // 6. About Section
           const _SectionHeading(title: 'About'),
           const SizedBox(height: 12),
           _SectionCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      color: Theme.of(context).colorScheme.primaryContainer,
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.asset(
+                        'assets/branding/reader_icon.png',
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                  title: Text(
+                    'About App',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  subtitle: Text(
+                    'Features, version & more',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () {
+                    ref.read(hapticServiceProvider).selection();
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const AboutAppScreen(),
+                      ),
+                    );
+                  },
+                ),
+                const Divider(height: 24),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      color: Theme.of(context).colorScheme.secondaryContainer,
+                    ),
+                    child: Icon(
+                      Icons.privacy_tip_rounded,
+                      color: Theme.of(context).colorScheme.onSecondaryContainer,
+                    ),
+                  ),
+                  title: Text(
+                    'Privacy Policy',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  subtitle: Text(
+                    'How we handle your data',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () {
+                    ref.read(hapticServiceProvider).selection();
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const PrivacyPolicyScreen(),
+                      ),
+                    );
+                  },
+                ),
+                const Divider(height: 24),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      color: Theme.of(context).colorScheme.secondaryContainer,
+                    ),
+                    child: Icon(
+                      Icons.gavel_rounded,
+                      color: Theme.of(context).colorScheme.onSecondaryContainer,
+                    ),
+                  ),
+                  title: Text(
+                    'Terms & Conditions',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  subtitle: Text(
+                    'Rules governing use of the app',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () {
+                    ref.read(hapticServiceProvider).selection();
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const TermsConditionsScreen(),
+                      ),
+                    );
+                  },
+                ),
+                const Divider(height: 24),
                 Text(
                   'Reader',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -297,7 +451,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           
           const SizedBox(height: 32),
           
-          // 6. Footer
+          // 7. Footer
           Center(
             child: Column(
               children: [

@@ -32,16 +32,41 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+        </activity>
+
+        <!-- Native translucent activity for all external share/open intents:
+             URL shares from the browser AND RSS/XML file opens from the file
+             manager. Has no Flutter engine so Theme.Translucent.NoTitleBar
+             works correctly — the caller app is visible behind the card. -->
+        <activity
+            android:name=".ShareReceiverActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:configChanges="orientation|screenSize"
+            android:theme="@style/ShareTheme"
+            android:excludeFromRecents="true">
+            <!-- URL shared as plain text from browser -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/plain" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <!-- RSS/XML file shared via SEND -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="application/rss+xml" />
                 <data android:mimeType="application/xml" />
                 <data android:mimeType="text/xml" />
                 <data android:mimeType="application/atom+xml" />
                 <data android:mimeType="application/octet-stream" />
             </intent-filter>
+            <!-- RSS/XML file opened via VIEW by mime type -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -50,6 +75,7 @@
                 <data android:mimeType="text/xml" />
                 <data android:mimeType="application/atom+xml" />
             </intent-filter>
+            <!-- RSS/XML file opened via VIEW by file extension (file:// scheme) -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -62,6 +88,7 @@
                 <data android:pathPattern=".*\\.xml" />
                 <data android:pathPattern=".*\\.XML" />
             </intent-filter>
+            <!-- RSS/XML file opened via VIEW by file extension (content:// scheme) -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -74,12 +101,8 @@
                 <data android:pathPattern=".*\\.xml" />
                 <data android:pathPattern=".*\\.XML" />
             </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.SEND_MULTIPLE" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="text/plain" />
-            </intent-filter>
         </activity>
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

@@ -37,9 +37,7 @@ class _RSSSourcesScreenState extends ConsumerState<RSSSourcesScreen> {
     final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFFFCF5),
       appBar: AppBar(
-        backgroundColor: const Color(0xFFFFFCF5),
         title: const Text('Feeds'),
         actions: [
           IconButton(
@@ -111,7 +109,7 @@ class _RSSSourcesScreenState extends ConsumerState<RSSSourcesScreen> {
               onMove: () => showMoveFeedToFolderSheet(context, ref, feed),
               onRefresh: () =>
                   ref.read(rssActionsProvider).refreshFeed(feed),
-              onRemove: () => ref.read(rssActionsProvider).removeFeed(feed.id),
+              onRemove: () => _confirmDeleteFeed(context, feed),
             ),
             const SizedBox(height: 6),
           ],
@@ -146,7 +144,7 @@ class _RSSSourcesScreenState extends ConsumerState<RSSSourcesScreen> {
               onMove: () => showMoveFeedToFolderSheet(context, ref, feed),
               onRefresh: () =>
                   ref.read(rssActionsProvider).refreshFeed(feed),
-              onRemove: () => ref.read(rssActionsProvider).removeFeed(feed.id),
+              onRemove: () => _confirmDeleteFeed(context, feed),
             ),
             const SizedBox(height: 6),
           ],
@@ -176,6 +174,51 @@ class _RSSSourcesScreenState extends ConsumerState<RSSSourcesScreen> {
         },
       ),
     );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Delete feed confirmation (two-step: delete feed, then optionally articles)
+  // ---------------------------------------------------------------------------
+
+  Future<void> _confirmDeleteFeed(BuildContext context, Feed feed) async {
+    final choice = await showDialog<_FeedDeleteChoice>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Remove Source'),
+        content: Text(
+          'Remove "${feed.name}"?\n\nDo you also want to delete all articles from this source in your Read page?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () =>
+                Navigator.of(ctx).pop(_FeedDeleteChoice.cancel),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () =>
+                Navigator.of(ctx).pop(_FeedDeleteChoice.sourceOnly),
+            child: const Text('Source only'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFB93A2E),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () =>
+                Navigator.of(ctx).pop(_FeedDeleteChoice.sourceAndArticles),
+            child: const Text('Source & articles'),
+          ),
+        ],
+      ),
+    );
+    if (choice == null || choice == _FeedDeleteChoice.cancel) return;
+    await ref.read(rssActionsProvider).removeFeedAndArticles(
+          feed.id,
+          feed.name,
+          deleteArticles: choice == _FeedDeleteChoice.sourceAndArticles,
+        );
   }
 
   // ---------------------------------------------------------------------------
@@ -237,13 +280,13 @@ class _RSSSourcesScreenState extends ConsumerState<RSSSourcesScreen> {
           ),
         ),
         const SizedBox(height: 18),
-        const Text(
+        Text(
           'No feeds yet',
           textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: 17,
             fontWeight: FontWeight.w700,
-            color: Color(0xFF2C2925),
+            color: Theme.of(context).colorScheme.onSurface,
           ),
         ),
         const SizedBox(height: 8),
@@ -254,7 +297,7 @@ class _RSSSourcesScreenState extends ConsumerState<RSSSourcesScreen> {
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 14,
-              color: const Color(0xFF6B665E).withValues(alpha: 0.85),
+              color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.85),
             ),
           ),
         ),
@@ -301,7 +344,7 @@ class _FolderHeader extends StatelessWidget {
               fwf.folder.name,
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w700,
-                    color: const Color(0xFF2C2925),
+                    color: scheme.onSurface,
                   ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -535,7 +578,7 @@ class _AddChoiceSheet extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFFCF5),
+        color: scheme.surface,
         borderRadius: BorderRadius.circular(28),
       ),
       child: Column(
@@ -573,6 +616,8 @@ class _AddChoiceSheet extends StatelessWidget {
     );
   }
 }
+
+enum _FeedDeleteChoice { cancel, sourceOnly, sourceAndArticles }
 
 class _ChoiceTile extends StatelessWidget {
   const _ChoiceTile({

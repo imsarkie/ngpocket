@@ -24,15 +24,15 @@ final foldersWithFeedsProvider =
   // We use a broadcast StreamController so we can feed it from two sources.
   final sc = StreamController<FoldersWithFeedsState>.broadcast();
 
-  var _folders = <FolderRow>[];
-  var _feeds = <Feed>[];
-  var _ready = 0; // counts how many streams have emitted at least once
+  var folders = <FolderRow>[];
+  var feeds = <Feed>[];
+  var ready = 0; // counts how many streams have emitted at least once
 
-  void _recompute() {
-    if (_ready < 2) return; // wait until both streams have initialised
+  void recompute() {
+    if (ready < 2) return; // wait until both streams have initialised
     final grouped = <int, List<Feed>>{};
     final uncategorised = <Feed>[];
-    for (final feed in _feeds) {
+    for (final feed in feeds) {
       final fid = feed.folderId;
       if (fid == null) {
         uncategorised.add(feed);
@@ -40,7 +40,7 @@ final foldersWithFeedsProvider =
         grouped.putIfAbsent(fid, () => []).add(feed);
       }
     }
-    final folderItems = _folders
+    final folderItems = folders
         .map((f) => FolderWithFeeds(folder: f, feeds: grouped[f.id] ?? const []))
         .toList(growable: false);
     if (!sc.isClosed) {
@@ -51,28 +51,28 @@ final foldersWithFeedsProvider =
     }
   }
 
-  var _folderFirst = true;
+  var folderFirst = true;
   final folderSub = db.watchFolders().listen(
-    (folders) {
-      _folders = folders;
-      if (_folderFirst) {
-        _folderFirst = false;
-        _ready++;
+    (latestFolders) {
+      folders = latestFolders;
+      if (folderFirst) {
+        folderFirst = false;
+        ready++;
       }
-      _recompute();
+      recompute();
     },
     onError: sc.addError,
   );
 
-  var _feedFirst = true;
+  var feedFirst = true;
   final feedSub = db.watchFeeds().listen(
-    (feeds) {
-      _feeds = feeds;
-      if (_feedFirst) {
-        _feedFirst = false;
-        _ready++;
+    (latestFeeds) {
+      feeds = latestFeeds;
+      if (feedFirst) {
+        feedFirst = false;
+        ready++;
       }
-      _recompute();
+      recompute();
     },
     onError: sc.addError,
   );
@@ -224,6 +224,19 @@ class RssActions {
   }
 
   Future<void> removeFeed(int id) async {
+    await _db.removeFeed(id);
+  }
+
+  /// Removes the feed and, if [deleteArticles] is true, also deletes every
+  /// article whose source name matches [feedName] from the inbox / library.
+  Future<void> removeFeedAndArticles(
+    int id,
+    String feedName, {
+    required bool deleteArticles,
+  }) async {
+    if (deleteArticles) {
+      await _db.deleteArticlesBySource(feedName);
+    }
     await _db.removeFeed(id);
   }
 

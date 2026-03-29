@@ -41,9 +41,7 @@ class _ReadInboxScreenState extends ConsumerState<ReadInboxScreen>
     };
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFFFCF5),
       appBar: AppBar(
-        backgroundColor: const Color(0xFFFFFCF5),
         leading: filter is! FeedFilterAll
             ? IconButton(
                 icon: const Icon(Icons.arrow_back_rounded),
@@ -243,7 +241,7 @@ class _FolderChipBar extends ConsumerWidget {
         if (!hasChips) return const SizedBox.shrink();
 
         return Container(
-          color: const Color(0xFFFFFCF5),
+          color: Theme.of(context).scaffoldBackgroundColor,
           child: Column(
             children: [
               SizedBox(
@@ -381,7 +379,7 @@ class _Chip extends StatelessWidget {
                       selected ? FontWeight.w700 : FontWeight.w500,
                   color: selected
                       ? Colors.white
-                      : const Color(0xFF2C2925).withValues(alpha: 0.75),
+                      : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.75),
                 ),
               ),
             ],

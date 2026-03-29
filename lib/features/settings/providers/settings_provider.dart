@@ -4,6 +4,8 @@ import 'package:reader/core/models/app_settings.dart';
 import 'package:reader/core/services/background_sync_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+const kSettingsThemeModeKey = 'settings_theme_mode';
+
 final appSettingsProvider =
     NotifierProvider<AppSettingsController, AppSettings>(
       AppSettingsController.new,
@@ -32,10 +34,18 @@ class AppSettingsController extends Notifier<AppSettings> {
       final reminders = _sanitizeRemindersPerDay(
         prefs.getInt(kSettingsUnreadNotificationThresholdKey),
       );
+      final themeModeIndex = prefs.getInt(kSettingsThemeModeKey);
+      final themeMode = themeModeIndex != null
+          ? ThemeMode.values[themeModeIndex.clamp(
+              0,
+              ThemeMode.values.length - 1,
+            )]
+          : AppSettings.defaults.themeMode;
 
       state = state.copyWith(
         morningSyncNotificationsEnabled: notificationsEnabled,
         libraryRemindersPerDay: reminders,
+        themeMode: themeMode,
       );
 
       if (notificationsEnabled) {
@@ -61,13 +71,18 @@ class AppSettingsController extends Notifier<AppSettings> {
 
   Future<void> ensureHydrated() => _hydrateSettings();
 
-  void setThemeMode(ThemeMode mode) {
-    state = state.copyWith(themeMode: ThemeMode.light);
+  Future<void> setThemeMode(ThemeMode mode) async {
+    state = state.copyWith(themeMode: mode);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(kSettingsThemeModeKey, mode.index);
+    } catch (_) {
+      // Ignore write failures; in-memory state is already updated.
+    }
   }
 
-  void setDarkMode(bool isDark) {
-    state = state.copyWith(themeMode: ThemeMode.light);
-  }
+  Future<void> setDarkMode(bool isDark) =>
+      setThemeMode(isDark ? ThemeMode.dark : ThemeMode.light);
 
   void setReaderFontScale(double scale) {
     state = state.copyWith(readerFontScale: scale.clamp(0.85, 1.5));

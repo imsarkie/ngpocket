@@ -446,6 +446,26 @@ class AppDatabase extends _$AppDatabase {
     return (delete(feeds)..where((tbl) => tbl.id.equals(id))).go();
   }
 
+  /// Deletes all articles (plus their highlights and tags) whose [source]
+  /// matches [source].  Used when a feed is removed and the user wants to
+  /// purge its articles from the inbox / library too.
+  Future<void> deleteArticlesBySource(String source) {
+    return transaction(() async {
+      final ids = await (selectOnly(articles)
+            ..addColumns([articles.id])
+            ..where(articles.source.equals(source)))
+          .map((row) => row.read(articles.id)!)
+          .get();
+
+      for (final id in ids) {
+        await deleteTagsForArticle(id);
+        await (delete(highlights)..where((tbl) => tbl.articleId.equals(id)))
+            .go();
+      }
+      await (delete(articles)..where((tbl) => tbl.source.equals(source))).go();
+    });
+  }
+
   Future<void> updateFeedTimestamp(int feedId) {
     return (update(feeds)..where((tbl) => tbl.id.equals(feedId))).write(
       FeedsCompanion(lastUpdated: Value(DateTime.now())),
@@ -536,6 +556,25 @@ class AppDatabase extends _$AppDatabase {
       ),
     );
     return false;
+  }
+
+  /// Inserts a lightweight placeholder so the article appears in the list
+  /// immediately while its content is still being fetched.
+  /// Skips silently if the URL already exists.
+  Future<void> insertPlaceholderArticle(String url) async {
+    final existing = await findArticleByUrl(url);
+    if (existing != null) return;
+    final host =
+        Uri.tryParse(url)?.host.replaceFirst('www.', '') ?? '';
+    await into(articles).insert(
+      ArticlesCompanion.insert(
+        title: host.isNotEmpty ? host : url,
+        url: url,
+        content: const Value(''),
+        source: Value(host.isNotEmpty ? host : null),
+        saved: const Value(true),
+      ),
+    );
   }
 
   Future<void> saveParsedArticle({

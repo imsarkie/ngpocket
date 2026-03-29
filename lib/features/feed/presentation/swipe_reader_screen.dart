@@ -40,7 +40,10 @@ class _SwipeReaderScreenState extends ConsumerState<SwipeReaderScreen> {
     final backgroundGradient = LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
-      colors: const [Color(0xFFF8F0E3), Color(0xFFE7DDCC)],
+      colors: [
+        Theme.of(context).scaffoldBackgroundColor,
+        colorScheme.surfaceContainerHighest,
+      ],
     );
 
     return Scaffold(
@@ -321,7 +324,16 @@ class _SwipeActionBar extends StatelessWidget {
                     onPressed: onRead,
                     icon: Icons.done_rounded,
                     label: 'Read',
-                    tooltip: 'Mark as read',
+                    tooltip: 'Mark as read (swipe left)',
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _ActionButton(
+                    onPressed: onNext,
+                    icon: Icons.keyboard_double_arrow_up_rounded,
+                    label: 'Next',
+                    tooltip: 'Skip to next (swipe up)',
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -330,16 +342,7 @@ class _SwipeActionBar extends StatelessWidget {
                     onPressed: onSave,
                     icon: Icons.bookmark_add_rounded,
                     label: 'Save',
-                    tooltip: 'Save article',
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _ActionButton(
-                    onPressed: onNext,
-                    icon: Icons.skip_next_rounded,
-                    label: 'Next',
-                    tooltip: 'Skip to next article',
+                    tooltip: 'Save article (swipe right)',
                   ),
                 ),
               ],
