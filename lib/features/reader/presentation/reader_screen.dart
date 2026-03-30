@@ -29,6 +29,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   late final ScrollController _scrollController;
   late final ValueNotifier<double> _progressNotifier;
   String? _selectedText;
+  bool _isReaderView = false;
 
   @override
   void initState() {
@@ -45,6 +46,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
   @override
   void dispose() {
+    if (_isReaderView) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    }
     _progressNotifier.dispose();
     _scrollController
       ..removeListener(_syncProgress)
@@ -70,44 +74,68 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     final canHighlight = _selectedText?.trim().isNotEmpty ?? false;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Reader'),
-        actions: [
-          IconButton(
-            tooltip: 'Re-parse article',
-            icon: const Icon(Icons.sync_rounded),
-            onPressed: _reparseCurrentArticle,
-          ),
-          IconButton(
-            tooltip: 'Open original in browser',
-            icon: const Icon(Icons.open_in_browser_rounded),
-            onPressed: _openOriginalInBrowser,
-          ),
-          IconButton(
-            tooltip: 'Tags',
-            icon: const Icon(Icons.local_offer_outlined),
-            onPressed: () => _showTagsSheet(context),
-          ),
-          IconButton(
-            tooltip: 'Adjust typography',
-            icon: const Icon(Icons.text_fields_rounded),
-            onPressed: () => _showTypographySheet(context),
-          ),
-        ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(2),
-          child: ValueListenableBuilder<double>(
-            valueListenable: _progressNotifier,
-            builder: (context, progress, _) => LinearProgressIndicator(
-              value: progress,
-              minHeight: 2,
-              backgroundColor: Theme.of(
-                context,
-              ).colorScheme.surfaceContainerHighest,
+      appBar: _isReaderView
+          ? null
+          : AppBar(
+              title: const Text('Reader'),
+              actions: [
+                IconButton(
+                  tooltip: 'Open original in browser',
+                  icon: const Icon(Icons.open_in_browser_rounded),
+                  onPressed: _openOriginalInBrowser,
+                ),
+                IconButton(
+                  tooltip: 'Tags',
+                  icon: const Icon(Icons.local_offer_outlined),
+                  onPressed: () => _showTagsSheet(context),
+                ),
+                IconButton(
+                  tooltip: 'Adjust typography',
+                  icon: const Icon(Icons.text_fields_rounded),
+                  onPressed: () => _showTypographySheet(context),
+                ),
+                PopupMenuButton<_ReaderMenuAction>(
+                  icon: const Icon(Icons.more_vert_rounded),
+                  onSelected: (action) {
+                    switch (action) {
+                      case _ReaderMenuAction.reDownload:
+                        _reparseCurrentArticle();
+                      case _ReaderMenuAction.readerView:
+                        _enterReaderView();
+                      case _ReaderMenuAction.quickDarkMode:
+                        break; // TODO: implement quick dark mode
+                    }
+                  },
+                  itemBuilder: (context) => const [
+                    PopupMenuItem(
+                      value: _ReaderMenuAction.reDownload,
+                      child: Text('Re-download'),
+                    ),
+                    PopupMenuItem(
+                      value: _ReaderMenuAction.readerView,
+                      child: Text('Reader view'),
+                    ),
+                    PopupMenuItem(
+                      value: _ReaderMenuAction.quickDarkMode,
+                      child: Text('Quick dark mode'),
+                    ),
+                  ],
+                ),
+              ],
+              bottom: PreferredSize(
+                preferredSize: const Size.fromHeight(2),
+                child: ValueListenableBuilder<double>(
+                  valueListenable: _progressNotifier,
+                  builder: (context, progress, _) => LinearProgressIndicator(
+                    value: progress,
+                    minHeight: 2,
+                    backgroundColor: Theme.of(
+                      context,
+                    ).colorScheme.surfaceContainerHighest,
+                  ),
+                ),
+              ),
             ),
-          ),
-        ),
-      ),
       bottomSheet: _selectedText == null
           ? null
           : SafeArea(
@@ -149,7 +177,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                 ),
               ),
             ),
-      body: preparedAsync.when(
+      body: _wrapBodyForReaderView(preparedAsync.when(
         data: (prepared) => ListView.builder(
           controller: _scrollController,
           padding: EdgeInsets.fromLTRB(
@@ -245,8 +273,58 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
             ),
           ),
         ),
+      )),
+    );
+  }
+
+  Widget _wrapBodyForReaderView(Widget content) {
+    if (_isReaderView) {
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onDoubleTap: _onReaderViewDoubleTap,
+        child: SafeArea(child: content),
+      );
+    }
+    return content;
+  }
+
+  Future<void> _enterReaderView() async {
+    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    if (!mounted) return;
+    setState(() => _isReaderView = true);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Double tap to exit reader mode'),
+        duration: Duration(seconds: 3),
       ),
     );
+  }
+
+  Future<void> _exitReaderView() async {
+    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    if (mounted) setState(() => _isReaderView = false);
+  }
+
+  Future<void> _onReaderViewDoubleTap() async {
+    final exit = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Exit reader view?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Stay'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Exit'),
+          ),
+        ],
+      ),
+    );
+    if (exit == true) {
+      await _exitReaderView();
+    }
   }
 
   Widget _buildParagraph(
@@ -1062,3 +1140,5 @@ class _TextRange {
   final int start;
   final int end;
 }
+
+enum _ReaderMenuAction { reDownload, readerView, quickDarkMode }

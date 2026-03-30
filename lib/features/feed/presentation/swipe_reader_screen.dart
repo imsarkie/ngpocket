@@ -50,11 +50,7 @@ class _SwipeReaderScreenState extends ConsumerState<SwipeReaderScreen> {
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: const Text('Swipe Reader'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
-          onPressed:
-              widget.onBackPressed ?? () => Navigator.of(context).maybePop(),
-        ),
+        automaticallyImplyLeading: false,
       ),
       body: Stack(
         children: [
