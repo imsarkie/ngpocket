@@ -1,4 +1,4 @@
-package com.example.reader
+package com.monkappstudio.reader
 
 import android.app.Activity
 import android.content.Context
